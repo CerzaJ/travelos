@@ -1,0 +1,4 @@
+# Dependencias del proyecto
+
+pip install python-dotenv
+pip install "fastapi[standard]"
