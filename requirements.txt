@@ -2,3 +2,5 @@
 
 pip install python-dotenv
 pip install "fastapi[standard]"
+winget install OpenJS.NodeJS.LTS
+npm install
