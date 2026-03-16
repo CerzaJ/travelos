@@ -258,10 +258,10 @@ Este proyecto está bajo la licencia MIT - ver [`LICENSE`](LICENSE) para detalle
 
 ## 👥 Equipo
 
-- **Product Owner:** [Maria_Jose]
-- **Tech Lead:** [Ameyal_y_Matetotas]
+- **Product Owner:** [Jose_Maria]
+- **Tech Lead:** [Ameyal_y_Mateo]
 - **Backend Devs:** [TheNewMix]
-- **Frontend Devs:** [Uriburron]
+- **Frontend Devs:** [Uriel]
 
 ## 📞 Contacto
 
