@@ -58,8 +58,8 @@ export default function RecentRequestsTable({ onNewRequest }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.client}>
+          {rows.map((row, index) => (
+            <tr key={index}>
               <td>{row.client}</td>
               <td>{row.destination}</td>
               <td>{row.dates}</td>
