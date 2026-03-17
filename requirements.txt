@@ -2,4 +2,6 @@
 
 pip install python-dotenv
 pip install "fastapi[standard]"
-npm install (una vez que se tenga instalado el node.js)
+pip install pydantic
+winget install OpenJS.NodeJS.LTS
+npm install
