@@ -1,12 +1,2 @@
-# Dependencias del proyecto
-
-pip install python-dotenv
-pip install "fastapi[standard]"
-pip install pydantic
-winget install OpenJS.NodeJS.LTS
-npm install
-
-# Correr el frontend
-cd frontend
-cd src
-npm run dev
+fastapi[standard]
+pydantic
