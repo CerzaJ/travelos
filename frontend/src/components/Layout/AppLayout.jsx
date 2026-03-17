@@ -26,10 +26,6 @@ export default function AppLayout({ children, pageTitle, activeItem, onNavigate 
           >
             Travel Requests
           </button>
-          <button className="nav-item">Providers</button>
-          <button className="nav-item">Knowledge Base</button>
-          <button className="nav-item">Analytics</button>
-          <button className="nav-item">Settings</button>
         </nav>
       </aside>
 
