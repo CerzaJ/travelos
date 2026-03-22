@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field
-from datetime import date
 from typing import List, Optional
-from fastapi import FastAPI
+from datetime import date
 
 class Travelers(BaseModel):
     adults: int = Field(..., ge=1)
@@ -22,4 +21,4 @@ class TravelRequest(BaseModel):
     travelers: Travelers
     budget_mxn: float = Field(..., gt=0)
     preferences: Preferences
-    notes: Optional[str] = ""
+    notes: Optional[str] = None
