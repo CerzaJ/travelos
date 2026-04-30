@@ -29,7 +29,7 @@ const rows = [
   },
 ]
 
-export default function RecentRequestsTable({ onNewRequest, onViewRequest }) {
+export default function RecentRequestsTable({ onNewRequest }) {
   return (
     <section className="card">
       <div className="card-header">
@@ -70,9 +70,7 @@ export default function RecentRequestsTable({ onNewRequest, onViewRequest }) {
                 </span>
               </td>
               <td>
-                <button className="link-button" onClick={() => onViewRequest && onViewRequest(row)}>
-                  View →
-                </button>
+                <button className="link-button">View →</button>
               </td>
             </tr>
           ))}
