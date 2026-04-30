@@ -1,3 +1,4 @@
+frontend
 import AppLayout from '../components/Layout/AppLayout'
 import StatsCards from '../components/Dashboard/StatsCards'
 import RecentRequestsTable from '../components/Dashboard/RecentRequestsTable'

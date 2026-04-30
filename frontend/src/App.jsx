@@ -2,6 +2,7 @@ import { useState } from 'react'
 import './App.css'
 import DashboardPage from './pages/Dashboard'
 import NewTravelRequestPage from './pages/NewTravelRequest'
+import SettingsComingSoonPage from './pages/SettingsComingSoon'
 import TravelRequestsPage from './pages/TravelRequests'
 import TravelRequestProcessingPage from './pages/TravelRequestProcessing'
 import TravelRequestReviewPage from './pages/TravelRequestReview'
@@ -27,7 +28,7 @@ function App() {
   }
 
   const handleNavigate = (target) => {
-    if (target === 'providers' || target === 'analytics' || target === 'settings') {
+    if (target === 'providers' || target === 'analytics') {
       return
     }
 
@@ -53,6 +54,10 @@ function App() {
 
   if (currentPage === 'request-processing') {
     return <TravelRequestProcessingPage onNavigate={handleNavigate} />
+  }
+
+  if (currentPage === 'settings') {
+    return <SettingsComingSoonPage onNavigate={handleNavigate} />
   }
 
   return <DashboardPage onNavigate={handleNavigate} />
