@@ -13,7 +13,88 @@ const formatMoney = (amount, currency = 'MXN') => {
   }).format(amount)
 }
 
-export default function NewTravelRequestPage({ onNavigate }) {
+const formatDateRange = (startDate, endDate) => {
+  if (!startDate || !endDate) {
+    return '-'
+  }
+
+  const formattedStart = new Date(startDate).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+  const formattedEnd = new Date(endDate).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+
+  return `${formattedStart} - ${formattedEnd}`
+}
+
+const getDurationDays = (startDate, endDate, fallbackDays) => {
+  if (typeof fallbackDays === 'number' && fallbackDays > 0) {
+    return fallbackDays
+  }
+
+  if (!startDate || !endDate) {
+    return 1
+  }
+
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  const diffMs = end.getTime() - start.getTime()
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+  return Math.max(1, diffDays)
+}
+
+const buildPackageOptions = (responseData, startDate, endDate) => {
+  const flights = [...(responseData.flights || [])].sort((a, b) => (a.price || 0) - (b.price || 0))
+  const hotels = [...(responseData.hotels || [])].sort(
+    (a, b) => (a.price_per_night || 0) - (b.price_per_night || 0),
+  )
+  const durationDays = getDurationDays(startDate, endDate, responseData.itinerary?.days)
+  const basePrice = responseData.pricing?.grand_total || 0
+  const currency = responseData.pricing?.currency || 'MXN'
+  const midFlightIndex = Math.floor((flights.length - 1) / 2)
+  const midHotelIndex = Math.floor((hotels.length - 1) / 2)
+  const multipliers = [0.85, 1, 1.2]
+
+  const packageBlueprints = [
+    { id: 'economy', title: 'Economy Package', recommended: false, flightIndex: 0, hotelIndex: 0 },
+    {
+      id: 'standard',
+      title: 'Standard Package',
+      recommended: true,
+      flightIndex: midFlightIndex,
+      hotelIndex: midHotelIndex,
+    },
+    {
+      id: 'premium',
+      title: 'Premium Package',
+      recommended: false,
+      flightIndex: flights.length - 1,
+      hotelIndex: hotels.length - 1,
+    },
+  ]
+
+  return packageBlueprints.map((item, index) => {
+    const flight = flights[Math.max(0, item.flightIndex)] || null
+    const hotel = hotels[Math.max(0, item.hotelIndex)] || null
+    const fallbackPrice = basePrice > 0 ? basePrice * multipliers[index] : 0
+    const totalPrice = flight && hotel ? flight.price + hotel.price_per_night * durationDays : fallbackPrice
+
+    return {
+      ...item,
+      totalPrice,
+      currency,
+      flight,
+      hotel,
+    }
+  })
+}
+
+export default function NewTravelRequestPage({ onNavigate, onReviewReady }) {
   const [clientName, setClientName] = useState('')
   const [clientEmail, setClientEmail] = useState('')
   const [destination, setDestination] = useState('')
@@ -89,6 +170,28 @@ export default function NewTravelRequestPage({ onNavigate }) {
 
       const data = await response.json()
       setResponseData(data)
+
+      const [adultsRawValue, childrenRawValue] = travelers.split('-')
+      const minBudgetValue = Number(minBudget || maxBudget || 0)
+      const maxBudgetValue = Number(maxBudget || minBudget || 0)
+      const reviewData = {
+        requestSummary: {
+          destination,
+          dateRange: formatDateRange(startDate, endDate),
+          travelers: `${Number(adultsRawValue || 2)} Adults${Number(childrenRawValue || 0) > 0 ? `, ${Number(childrenRawValue)} Children` : ''}`,
+          budget: `${formatMoney(minBudgetValue, data.pricing?.currency || 'MXN')} - ${formatMoney(maxBudgetValue, data.pricing?.currency || 'MXN')}`,
+          preferences: preferences || 'No additional preferences provided.',
+        },
+        packages: buildPackageOptions(data, startDate, endDate),
+      }
+
+      if (onReviewReady) {
+        onReviewReady(reviewData)
+      }
+
+      if (onNavigate) {
+        onNavigate('request-review')
+      }
     } catch (error) {
       setSubmitError(error.message || 'Unable to generate travel packages.')
     } finally {

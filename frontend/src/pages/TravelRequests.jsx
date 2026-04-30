@@ -24,7 +24,13 @@ export default function TravelRequestsPage({ onNavigate }) {
         </button>
       </div>
 
-      <RecentRequestsTable onNewRequest={() => onNavigate && onNavigate('new-request')} />
+      <RecentRequestsTable
+        onNewRequest={() => onNavigate && onNavigate('new-request')}
+        onViewRequest={(requestRow) =>
+          onNavigate &&
+          onNavigate(requestRow?.status === 'Processing' ? 'request-processing' : 'request-review')
+        }
+      />
     </AppLayout>
   )
 }

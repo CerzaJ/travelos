@@ -10,7 +10,10 @@ export default function DashboardPage({ onNavigate }) {
       onNavigate={onNavigate}
     >
       <StatsCards />
-      <RecentRequestsTable onNewRequest={() => onNavigate('new-request')} />
+      <RecentRequestsTable
+        onNewRequest={() => onNavigate('new-request')}
+        onViewRequest={() => onNavigate('request-review')}
+      />
     </AppLayout>
   )
 }

@@ -1,4 +1,10 @@
 export default function AppLayout({ children, pageTitle, activeItem, onNavigate }) {
+  const navItems = [
+    { key: 'dashboard', label: 'Dashboard' },
+    { key: 'travel-requests', label: 'Travel Requests' },
+    { key: 'settings', label: 'Settings (Coming Soon)', disabled: true },
+  ]
+
   const handleNavigate = (target) => {
     if (onNavigate) {
       onNavigate(target)
@@ -14,18 +20,16 @@ export default function AppLayout({ children, pageTitle, activeItem, onNavigate 
         </div>
 
         <nav className="nav">
-          <button
-            className={`nav-item ${activeItem === 'dashboard' ? 'nav-item--active' : ''}`}
-            onClick={() => handleNavigate('dashboard')}
-          >
-            Dashboard
-          </button>
-          <button
-            className={`nav-item ${activeItem === 'travel-requests' ? 'nav-item--active' : ''}`}
-            onClick={() => handleNavigate('travel-requests')}
-          >
-            Travel Requests
-          </button>
+          {navItems.map((item) => (
+            <button
+              key={item.key}
+              className={`nav-item ${activeItem === item.key ? 'nav-item--active' : ''} ${item.disabled ? 'nav-item--disabled' : ''}`}
+              onClick={() => handleNavigate(item.key)}
+              disabled={Boolean(item.disabled)}
+            >
+              {item.label}
+            </button>
+          ))}
         </nav>
       </aside>
 
