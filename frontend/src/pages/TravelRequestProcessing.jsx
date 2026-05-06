@@ -36,6 +36,7 @@ const AGENT_STEPS = [
 
 export default function TravelRequestProcessingPage({ onNavigate }) {
   const [progress, setProgress] = useState(15)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -44,6 +45,30 @@ export default function TravelRequestProcessingPage({ onNavigate }) {
 
     return () => window.clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setElapsedSeconds((current) => current + 1)
+    }, 1000)
+
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    if (!onNavigate) {
+      return
+    }
+
+    if (progress < 96) {
+      return
+    }
+
+    const completeTimeout = window.setTimeout(() => {
+      onNavigate('request-review')
+    }, 1200)
+
+    return () => window.clearTimeout(completeTimeout)
+  }, [progress, onNavigate])
 
   const activeStepIndex = useMemo(() => {
     const ratio = progress / 100
@@ -72,6 +97,7 @@ export default function TravelRequestProcessingPage({ onNavigate }) {
           <p className="processing-progress-label">
             Currently working: {AGENT_STEPS[activeStepIndex].name}
           </p>
+          <p className="processing-progress-label">Tiempo de carga: {elapsedSeconds}s</p>
         </article>
 
         <article className="card processing-timeline-card">

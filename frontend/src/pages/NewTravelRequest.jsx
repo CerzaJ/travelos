@@ -1,6 +1,58 @@
 import { useState } from 'react'
 import AppLayout from '../components/Layout/AppLayout'
 
+const PILOT_MODE = true
+const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms))
+
+const buildMockResponseData = (payload) => ({
+  flights: [
+    {
+      airline: 'Aero Demo',
+      price: 6400,
+      departure_time: '07:45',
+      arrival_time: '11:20',
+      duration_hours: 3.6,
+    },
+    {
+      airline: 'Pilot Air',
+      price: 7900,
+      departure_time: '09:10',
+      arrival_time: '12:50',
+      duration_hours: 3.7,
+    },
+    {
+      airline: 'Sky Mock',
+      price: 10500,
+      departure_time: '14:35',
+      arrival_time: '18:20',
+      duration_hours: 3.8,
+    },
+  ],
+  hotels: [
+    { name: 'Hotel Base', stars: 3, price_per_night: 1900, location: payload.destination },
+    { name: 'Hotel Normal', stars: 4, price_per_night: 2900, location: payload.destination },
+    { name: 'Hotel Premium', stars: 5, price_per_night: 4300, location: payload.destination },
+  ],
+  pricing: {
+    flights_total: 7900,
+    hotel_total: 14500,
+    extras_total: 2100,
+    grand_total: 24500,
+    currency: 'MXN',
+  },
+  itinerary: {
+    destination: payload.destination,
+    days: 5,
+    plan: [
+      { day: 1, activities: ['Llegada y check-in', 'Tour panoramico del centro'] },
+      { day: 2, activities: ['City tour guiado', 'Cena en zona local'] },
+      { day: 3, activities: ['Excursion de dia completo'] },
+      { day: 4, activities: ['Dia libre con actividades opcionales'] },
+      { day: 5, activities: ['Check-out y regreso'] },
+    ],
+  },
+})
+
 const formatMoney = (amount, currency = 'MXN') => {
   if (typeof amount !== 'number' || Number.isNaN(amount)) {
     return '-'
@@ -61,17 +113,17 @@ const buildPackageOptions = (responseData, startDate, endDate) => {
   const multipliers = [0.85, 1, 1.2]
 
   const packageBlueprints = [
-    { id: 'economy', title: 'Economy Package', recommended: false, flightIndex: 0, hotelIndex: 0 },
+    { id: 'economy', title: 'Basico', recommended: false, flightIndex: 0, hotelIndex: 0 },
     {
       id: 'standard',
-      title: 'Standard Package',
+      title: 'Normal',
       recommended: true,
       flightIndex: midFlightIndex,
       hotelIndex: midHotelIndex,
     },
     {
       id: 'premium',
-      title: 'Premium Package',
+      title: 'Premium',
       recommended: false,
       flightIndex: flights.length - 1,
       hotelIndex: hotels.length - 1,
@@ -155,20 +207,26 @@ export default function NewTravelRequestPage({ onNavigate, onReviewReady }) {
 
     setIsSubmitting(true)
     try {
-      const response = await fetch(`${apiBaseUrl}/plan-trip`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      })
+      let data
+      if (PILOT_MODE) {
+        await sleep(1400)
+        data = buildMockResponseData(payload)
+      } else {
+        const response = await fetch(`${apiBaseUrl}/plan-trip`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        })
 
-      if (!response.ok) {
-        const errorBody = await response.text()
-        throw new Error(errorBody || `Request failed with status ${response.status}`)
+        if (!response.ok) {
+          const errorBody = await response.text()
+          throw new Error(errorBody || `Request failed with status ${response.status}`)
+        }
+
+        data = await response.json()
       }
-
-      const data = await response.json()
       setResponseData(data)
 
       const [adultsRawValue, childrenRawValue] = travelers.split('-')
@@ -190,7 +248,7 @@ export default function NewTravelRequestPage({ onNavigate, onReviewReady }) {
       }
 
       if (onNavigate) {
-        onNavigate('request-review')
+        onNavigate('request-processing')
       }
     } catch (error) {
       setSubmitError(error.message || 'Unable to generate travel packages.')

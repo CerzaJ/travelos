@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import './App.css'
 import DashboardPage from './pages/Dashboard'
+import LoginPage from './pages/Login'
 import NewTravelRequestPage from './pages/NewTravelRequest'
 import SettingsComingSoonPage from './pages/SettingsComingSoon'
 import TravelRequestsPage from './pages/TravelRequests'
@@ -19,8 +20,9 @@ const readStoredReview = () => {
 }
 
 function App() {
-  const [currentPage, setCurrentPage] = useState('dashboard')
+  const [currentPage, setCurrentPage] = useState('login')
   const [latestReviewData, setLatestReviewData] = useState(() => readStoredReview())
+  const [sessionUser, setSessionUser] = useState(null)
 
   const handleReviewReady = (reviewData) => {
     setLatestReviewData(reviewData)
@@ -33,6 +35,15 @@ function App() {
     }
 
     setCurrentPage(target)
+  }
+
+  const handleLogin = (userData) => {
+    setSessionUser(userData)
+    setCurrentPage('dashboard')
+  }
+
+  if (currentPage === 'login') {
+    return <LoginPage onLogin={handleLogin} />
   }
 
   if (currentPage === 'travel-requests') {
@@ -60,7 +71,7 @@ function App() {
     return <SettingsComingSoonPage onNavigate={handleNavigate} />
   }
 
-  return <DashboardPage onNavigate={handleNavigate} />
+  return <DashboardPage onNavigate={handleNavigate} sessionUser={sessionUser} />
 }
 
 export default App

@@ -1,35 +1,6 @@
-const rows = [
-  {
-    client: 'John Smith',
-    destination: 'Paris, France',
-    dates: 'Apr 15 - Apr 22, 2026',
-    travelers: '2 people',
-    status: 'Processing',
-  },
-  {
-    client: 'Sarah Johnson',
-    destination: 'Kyoto, Japan',
-    dates: 'May 1 - May 10, 2026',
-    travelers: '4 people',
-    status: 'Ready',
-  },
-  {
-    client: 'Michael Brown',
-    destination: 'Maldives',
-    dates: 'Jun 10 - Jun 20, 2026',
-    travelers: '2 people',
-    status: 'Pending',
-  },
-  {
-    client: 'Emily Davis',
-    destination: 'New York, USA',
-    dates: 'Apr 5 - Apr 12, 2026',
-    travelers: '3 people',
-    status: 'Approved',
-  },
-]
+const STATUS_OPTIONS = ['Pending', 'Processing', 'Ready', 'Approved']
 
-export default function RecentRequestsTable({ onNewRequest, onViewRequest }) {
+export default function RecentRequestsTable({ rows = [], onNewRequest, onViewRequest, onStatusChange }) {
   return (
     <section className="card">
       <div className="card-header">
@@ -65,9 +36,23 @@ export default function RecentRequestsTable({ onNewRequest, onViewRequest }) {
               <td>{row.dates}</td>
               <td>{row.travelers}</td>
               <td>
-                <span className={`status-pill status-${row.status.toLowerCase()}`}>
-                  {row.status}
-                </span>
+                <div className="status-control">
+                  <span className={`status-dot status-dot--${row.status.toLowerCase()}`} />
+                  <select
+                    className={`status-select status-select--${row.status.toLowerCase()}`}
+                    value={row.status}
+                    onChange={(event) =>
+                      onStatusChange && onStatusChange(index, event.target.value)
+                    }
+                    aria-label={`Status for ${row.client}`}
+                  >
+                    {STATUS_OPTIONS.map((statusOption) => (
+                      <option key={statusOption} value={statusOption}>
+                        {statusOption}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </td>
               <td>
                 <button className="link-button" onClick={() => onViewRequest && onViewRequest(row)}>
