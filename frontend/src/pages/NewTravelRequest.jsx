@@ -1,6 +1,58 @@
 import { useState } from 'react'
 import AppLayout from '../components/Layout/AppLayout'
 
+const PILOT_MODE = true
+const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms))
+
+const buildMockResponseData = (payload) => ({
+  flights: [
+    {
+      airline: 'Aero Demo',
+      price: 6400,
+      departure_time: '07:45',
+      arrival_time: '11:20',
+      duration_hours: 3.6,
+    },
+    {
+      airline: 'Pilot Air',
+      price: 7900,
+      departure_time: '09:10',
+      arrival_time: '12:50',
+      duration_hours: 3.7,
+    },
+    {
+      airline: 'Sky Mock',
+      price: 10500,
+      departure_time: '14:35',
+      arrival_time: '18:20',
+      duration_hours: 3.8,
+    },
+  ],
+  hotels: [
+    { name: 'Hotel Base', stars: 3, price_per_night: 1900, location: payload.destination },
+    { name: 'Hotel Normal', stars: 4, price_per_night: 2900, location: payload.destination },
+    { name: 'Hotel Premium', stars: 5, price_per_night: 4300, location: payload.destination },
+  ],
+  pricing: {
+    flights_total: 7900,
+    hotel_total: 14500,
+    extras_total: 2100,
+    grand_total: 24500,
+    currency: 'MXN',
+  },
+  itinerary: {
+    destination: payload.destination,
+    days: 5,
+    plan: [
+      { day: 1, activities: ['Llegada y check-in', 'Tour panoramico del centro'] },
+      { day: 2, activities: ['City tour guiado', 'Cena en zona local'] },
+      { day: 3, activities: ['Excursion de dia completo'] },
+      { day: 4, activities: ['Dia libre con actividades opcionales'] },
+      { day: 5, activities: ['Check-out y regreso'] },
+    ],
+  },
+})
+
 const formatMoney = (amount, currency = 'MXN') => {
   if (typeof amount !== 'number' || Number.isNaN(amount)) {
     return '-'
@@ -13,7 +65,88 @@ const formatMoney = (amount, currency = 'MXN') => {
   }).format(amount)
 }
 
-export default function NewTravelRequestPage({ onNavigate }) {
+const formatDateRange = (startDate, endDate) => {
+  if (!startDate || !endDate) {
+    return '-'
+  }
+
+  const formattedStart = new Date(startDate).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+  const formattedEnd = new Date(endDate).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+
+  return `${formattedStart} - ${formattedEnd}`
+}
+
+const getDurationDays = (startDate, endDate, fallbackDays) => {
+  if (typeof fallbackDays === 'number' && fallbackDays > 0) {
+    return fallbackDays
+  }
+
+  if (!startDate || !endDate) {
+    return 1
+  }
+
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  const diffMs = end.getTime() - start.getTime()
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+  return Math.max(1, diffDays)
+}
+
+const buildPackageOptions = (responseData, startDate, endDate) => {
+  const flights = [...(responseData.flights || [])].sort((a, b) => (a.price || 0) - (b.price || 0))
+  const hotels = [...(responseData.hotels || [])].sort(
+    (a, b) => (a.price_per_night || 0) - (b.price_per_night || 0),
+  )
+  const durationDays = getDurationDays(startDate, endDate, responseData.itinerary?.days)
+  const basePrice = responseData.pricing?.grand_total || 0
+  const currency = responseData.pricing?.currency || 'MXN'
+  const midFlightIndex = Math.floor((flights.length - 1) / 2)
+  const midHotelIndex = Math.floor((hotels.length - 1) / 2)
+  const multipliers = [0.85, 1, 1.2]
+
+  const packageBlueprints = [
+    { id: 'economy', title: 'Basico', recommended: false, flightIndex: 0, hotelIndex: 0 },
+    {
+      id: 'standard',
+      title: 'Normal',
+      recommended: true,
+      flightIndex: midFlightIndex,
+      hotelIndex: midHotelIndex,
+    },
+    {
+      id: 'premium',
+      title: 'Premium',
+      recommended: false,
+      flightIndex: flights.length - 1,
+      hotelIndex: hotels.length - 1,
+    },
+  ]
+
+  return packageBlueprints.map((item, index) => {
+    const flight = flights[Math.max(0, item.flightIndex)] || null
+    const hotel = hotels[Math.max(0, item.hotelIndex)] || null
+    const fallbackPrice = basePrice > 0 ? basePrice * multipliers[index] : 0
+    const totalPrice = flight && hotel ? flight.price + hotel.price_per_night * durationDays : fallbackPrice
+
+    return {
+      ...item,
+      totalPrice,
+      currency,
+      flight,
+      hotel,
+    }
+  })
+}
+
+export default function NewTravelRequestPage({ onNavigate, onReviewReady }) {
   const [clientName, setClientName] = useState('')
   const [clientEmail, setClientEmail] = useState('')
   const [destination, setDestination] = useState('')
@@ -74,21 +207,49 @@ export default function NewTravelRequestPage({ onNavigate }) {
 
     setIsSubmitting(true)
     try {
-      const response = await fetch(`${apiBaseUrl}/plan-trip`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      })
+      let data
+      if (PILOT_MODE) {
+        await sleep(1400)
+        data = buildMockResponseData(payload)
+      } else {
+        const response = await fetch(`${apiBaseUrl}/plan-trip`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        })
 
-      if (!response.ok) {
-        const errorBody = await response.text()
-        throw new Error(errorBody || `Request failed with status ${response.status}`)
+        if (!response.ok) {
+          const errorBody = await response.text()
+          throw new Error(errorBody || `Request failed with status ${response.status}`)
+        }
+
+        data = await response.json()
+      }
+      setResponseData(data)
+
+      const [adultsRawValue, childrenRawValue] = travelers.split('-')
+      const minBudgetValue = Number(minBudget || maxBudget || 0)
+      const maxBudgetValue = Number(maxBudget || minBudget || 0)
+      const reviewData = {
+        requestSummary: {
+          destination,
+          dateRange: formatDateRange(startDate, endDate),
+          travelers: `${Number(adultsRawValue || 2)} Adults${Number(childrenRawValue || 0) > 0 ? `, ${Number(childrenRawValue)} Children` : ''}`,
+          budget: `${formatMoney(minBudgetValue, data.pricing?.currency || 'MXN')} - ${formatMoney(maxBudgetValue, data.pricing?.currency || 'MXN')}`,
+          preferences: preferences || 'No additional preferences provided.',
+        },
+        packages: buildPackageOptions(data, startDate, endDate),
       }
 
-      const data = await response.json()
-      setResponseData(data)
+      if (onReviewReady) {
+        onReviewReady(reviewData)
+      }
+
+      if (onNavigate) {
+        onNavigate('request-processing')
+      }
     } catch (error) {
       setSubmitError(error.message || 'Unable to generate travel packages.')
     } finally {

@@ -1,11 +1,23 @@
-const stats = [
-  { label: 'Active Requests', value: '24', change: '+12%' },
-  { label: 'Processing Requests', value: '8', change: '+8%' },
-  { label: 'Ready Packages', value: '16', change: '+24%' },
-  { label: 'Total Revenue', value: '$124,500', change: '+18%' },
-]
+const formatMoney = (amount) =>
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(amount)
 
-export default function StatsCards() {
+export default function StatsCards({ rows = [] }) {
+  const activeRequests = rows.length
+  const processingRequests = rows.filter((row) => row.status === 'Processing').length
+  const readyPackages = rows.filter((row) => row.status === 'Ready').length
+  const projectedRevenue = rows.reduce((total, row) => total + (row.projectedRevenue || 0), 0)
+
+  const stats = [
+    { label: 'Active Requests', value: String(activeRequests), change: '+12%' },
+    { label: 'Processing Requests', value: String(processingRequests), change: '+8%' },
+    { label: 'Ready Packages', value: String(readyPackages), change: '+24%' },
+    { label: 'Projected Revenue', value: formatMoney(projectedRevenue), change: '+18%' },
+  ]
+
   return (
     <div className="stats-grid">
       {stats.map((item) => (
