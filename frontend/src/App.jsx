@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from './lib/supabase'
 import './App.css'
 import DashboardPage from './pages/Dashboard'
 import LoginPage from './pages/Login'
@@ -23,7 +24,23 @@ function App() {
   const [currentPage, setCurrentPage] = useState('login')
   const [latestReviewData, setLatestReviewData] = useState(() => readStoredReview())
   const [sessionUser, setSessionUser] = useState(null)
+  useEffect(() => {
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      setSessionUser({ email: session.user.email, name: session.user.user_metadata?.full_name })
+      setCurrentPage('dashboard')
+    }
+  })
 
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    if (!session) {
+      setSessionUser(null)
+      setCurrentPage('login')
+    }
+  })
+
+  return () => subscription.unsubscribe()
+}, [])
   const handleReviewReady = (reviewData) => {
     setLatestReviewData(reviewData)
     window.localStorage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(reviewData))
