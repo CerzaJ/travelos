@@ -110,40 +110,29 @@ const buildPackageOptions = (responseData, startDate, endDate) => {
   const currency = responseData.pricing?.currency || 'MXN'
   const midFlightIndex = Math.floor((flights.length - 1) / 2)
   const midHotelIndex = Math.floor((hotels.length - 1) / 2)
-  const multipliers = [0.85, 1, 1.2]
 
-  const packageBlueprints = [
-    { id: 'economy', title: 'Basico', recommended: false, flightIndex: 0, hotelIndex: 0 },
+  const item = {
+    id: 'recommended',
+    title: 'Recommended Package',
+    recommended: true,
+    flightIndex: midFlightIndex,
+    hotelIndex: midHotelIndex,
+  }
+
+  const flight = flights[Math.max(0, item.flightIndex)] || null
+  const hotel = hotels[Math.max(0, item.hotelIndex)] || null
+  const fallbackPrice = basePrice > 0 ? basePrice : 0
+  const totalPrice = flight && hotel ? flight.price + hotel.price_per_night * durationDays : fallbackPrice
+
+  return [
     {
-      id: 'standard',
-      title: 'Normal',
-      recommended: true,
-      flightIndex: midFlightIndex,
-      hotelIndex: midHotelIndex,
-    },
-    {
-      id: 'premium',
-      title: 'Premium',
-      recommended: false,
-      flightIndex: flights.length - 1,
-      hotelIndex: hotels.length - 1,
-    },
-  ]
-
-  return packageBlueprints.map((item, index) => {
-    const flight = flights[Math.max(0, item.flightIndex)] || null
-    const hotel = hotels[Math.max(0, item.hotelIndex)] || null
-    const fallbackPrice = basePrice > 0 ? basePrice * multipliers[index] : 0
-    const totalPrice = flight && hotel ? flight.price + hotel.price_per_night * durationDays : fallbackPrice
-
-    return {
       ...item,
       totalPrice,
       currency,
       flight,
       hotel,
-    }
-  })
+    },
+  ]
 }
 
 export default function NewTravelRequestPage({ onNavigate, onReviewReady }) {
@@ -232,6 +221,7 @@ export default function NewTravelRequestPage({ onNavigate, onReviewReady }) {
       const [adultsRawValue, childrenRawValue] = travelers.split('-')
       const minBudgetValue = Number(minBudget || maxBudget || 0)
       const maxBudgetValue = Number(maxBudget || minBudget || 0)
+      const stayNights = getDurationDays(startDate, endDate, data.itinerary?.days)
       const reviewData = {
         requestSummary: {
           destination,
@@ -239,6 +229,13 @@ export default function NewTravelRequestPage({ onNavigate, onReviewReady }) {
           travelers: `${Number(adultsRawValue || 2)} Adults${Number(childrenRawValue || 0) > 0 ? `, ${Number(childrenRawValue)} Children` : ''}`,
           budget: `${formatMoney(minBudgetValue, data.pricing?.currency || 'MXN')} - ${formatMoney(maxBudgetValue, data.pricing?.currency || 'MXN')}`,
           preferences: preferences || 'No additional preferences provided.',
+        },
+        tripContext: {
+          origin: departureCity.trim() || 'Origin pending',
+          destination: destination.trim() || data.itinerary?.destination || '',
+          departureDate: startDate,
+          returnDate: endDate,
+          nights: stayNights,
         },
         packages: buildPackageOptions(data, startDate, endDate),
       }
