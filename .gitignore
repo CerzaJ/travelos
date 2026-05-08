@@ -21,6 +21,7 @@ milvus_travelos.db
 .env.*.local
 backend/.env
 frontend/.env
+# .env.example SÍ se sube (tiene placeholders, no valores reales)
 
 # ── Node / Frontend ───────────────────────────────────────────────────────────
 node_modules/
