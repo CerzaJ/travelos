@@ -1,0 +1,22 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_SUPABASE_URL: "https://vwwshxjnqyuucgcwyusz.supabase.co"
+        VITE_SUPABASE_ANON_KEY: "sb_publishable_YMg1Q2ZC9IIjDvMVqK2O9A_wlpzTYHh"
+        VITE_API_URL: "http://localhost:8000"
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

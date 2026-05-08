@@ -34,7 +34,7 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
       packages.reduce((accumulator, pkg) => {
         accumulator[pkg.id] =
           pkg.imageUrl ||
-          `https://source.unsplash.com/featured/640x360/?${encodeURIComponent(`${destinationLabel} ${pkg.title}`)}`
+          `https://picsum.photos/seed/${encodeURIComponent(destinationLabel)}/640/360`
         return accumulator
       }, {}),
     [packages, destinationLabel],
@@ -152,7 +152,7 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
   if (detailPackage && flightHotelBreakdown) {
     const heroImage =
       packageImageUrls[detailPackage.id] ||
-      `https://source.unsplash.com/featured/1200x400/?${encodeURIComponent(destinationLabel)}`
+      `https://picsum.photos/seed/${encodeURIComponent(destinationLabel)}/1200/400`
     const flight = detailPackage.flight
     const hotel = detailPackage.hotel
     const originCode = tripContext?.origin?.slice(0, 3).toUpperCase() || 'ORG'
@@ -170,6 +170,9 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
               alt={`Destination ${destinationLabel}`}
               className="package-detail-hero-image"
               loading="lazy"
+              onError={(e) => {
+                e.target.src = `https://picsum.photos/seed/${encodeURIComponent(destinationLabel)}/1200/400`
+              }}
             />
             <div className="package-detail-hero-overlay">
               <p className="package-detail-hero-kicker">{detailPackage.title}</p>
@@ -243,7 +246,7 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
                   <div
                     className="package-detail-hotel-thumb"
                     style={{
-                      backgroundImage: `url(https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=560&q=80)`,
+                      backgroundImage: `url(${hotel.image_url || `https://picsum.photos/seed/${encodeURIComponent(hotel.name || destinationLabel)}/560/320`})`,
                     }}
                   />
                   <div className="package-detail-hotel-body">
@@ -369,7 +372,10 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
                     alt={`${pkg.title} for ${destinationLabel}`}
                     loading="lazy"
                     onLoad={() => handleImageResolved(pkg.id)}
-                    onError={() => handleImageResolved(pkg.id)}
+                    onError={(e) => {
+                      e.target.src = `https://picsum.photos/seed/${encodeURIComponent(destinationLabel)}/640/360`
+                      handleImageResolved(pkg.id)
+                    }}
                   />
                 </div>
                 <h3 className="package-title">{pkg.title}</h3>

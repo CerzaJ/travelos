@@ -1,0 +1,27 @@
+.env
+.env.*
+!.env.example
+
+.venv/
+venv/
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+.DS_Store
+.idea/
+.vscode/
+.cursor/
+
+langgraph_checkpoints.sqlite
+*.sqlite
+*.db
+
+# test JSON payloads with real data
+test*.json
+test_*.json

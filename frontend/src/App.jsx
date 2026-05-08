@@ -24,38 +24,55 @@ function App() {
   const [currentPage, setCurrentPage] = useState('login')
   const [latestReviewData, setLatestReviewData] = useState(() => readStoredReview())
   const [sessionUser, setSessionUser] = useState(null)
+  const [pendingRequest, setPendingRequest] = useState(null)
+
   useEffect(() => {
-  supabase.auth.getSession().then(({ data: { session } }) => {
-    if (session) {
-      setSessionUser({ email: session.user.email, name: session.user.user_metadata?.full_name })
-      setCurrentPage('dashboard')
-    }
-  })
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const initialPage = session ? 'dashboard' : 'login'
+      if (session) {
+        setSessionUser({ email: session.user.email, name: session.user.user_metadata?.full_name })
+        setCurrentPage('dashboard')
+      }
+      // Registrar la página inicial para que el browser back funcione
+      window.history.replaceState({ page: initialPage }, '')
+    })
 
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-    if (!session) {
-      setSessionUser(null)
-      setCurrentPage('login')
-    }
-  })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        // Solo actuar en logout real — nunca en TOKEN_REFRESHED ni tab switch
+        setSessionUser(null)
+        setCurrentPage('login')
+        window.history.replaceState({ page: 'login' }, '')
+      }
+    })
 
-  return () => subscription.unsubscribe()
-}, [])
+    // Botón de regresar del browser — solo cuando el usuario lo presiona manualmente
+    const onPopState = (e) => {
+      const page = e.state?.page
+      if (page) setCurrentPage(page)
+    }
+    window.addEventListener('popstate', onPopState)
+
+    return () => {
+      subscription.unsubscribe()
+      window.removeEventListener('popstate', onPopState)
+    }
+  }, [])
+
   const handleReviewReady = (reviewData) => {
     setLatestReviewData(reviewData)
     window.localStorage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(reviewData))
   }
 
   const handleNavigate = (target) => {
-    if (target === 'providers' || target === 'analytics') {
-      return
-    }
-
+    if (target === 'providers' || target === 'analytics') return
+    window.history.pushState({ page: target }, '')
     setCurrentPage(target)
   }
 
   const handleLogin = (userData) => {
     setSessionUser(userData)
+    window.history.pushState({ page: 'dashboard' }, '')
     setCurrentPage('dashboard')
   }
 
@@ -71,7 +88,7 @@ function App() {
     return (
       <NewTravelRequestPage
         onNavigate={handleNavigate}
-        onReviewReady={handleReviewReady}
+        onRequestSubmit={(payload, formContext) => setPendingRequest({ payload, formContext })}
       />
     )
   }
@@ -81,7 +98,13 @@ function App() {
   }
 
   if (currentPage === 'request-processing') {
-    return <TravelRequestProcessingPage onNavigate={handleNavigate} />
+    return (
+      <TravelRequestProcessingPage
+        onNavigate={handleNavigate}
+        onReviewReady={handleReviewReady}
+        pendingRequest={pendingRequest}
+      />
+    )
   }
 
   if (currentPage === 'settings') {

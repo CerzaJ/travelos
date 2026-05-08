@@ -2,7 +2,6 @@ export default function AppLayout({ children, pageTitle, activeItem, onNavigate 
   const navItems = [
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'travel-requests', label: 'Travel Requests' },
-    { key: 'settings', label: 'Settings (Coming Soon)' },
   ]
 
   const handleNavigate = (target) => {

@@ -1,86 +1,86 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AppLayout from '../components/Layout/AppLayout'
 import StatsCards from '../components/Dashboard/StatsCards'
 import RecentRequestsTable from '../components/Dashboard/RecentRequestsTable'
 
-const INITIAL_ROWS = [
-  {
-    client: 'John Smith',
-    destination: 'Paris, France',
-    dates: 'Apr 15 - Apr 22, 2026',
-    travelers: '2 people',
-    status: 'Processing',
-    projectedRevenue: 6200,
-  },
-  {
-    client: 'Sarah Johnson',
-    destination: 'Kyoto, Japan',
-    dates: 'May 1 - May 10, 2026',
-    travelers: '4 people',
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return '-'
+  try {
+    return new Date(`${dateStr}T12:00:00`).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+    })
+  } catch {
+    return dateStr
+  }
+}
+
+const mapRow = (row) => {
+  const notes = row.submitted_payload?.notes || ''
+  const clientName = notes.split('|')[0]?.trim() || row.origin_label || '-'
+  return {
+    client: clientName,
+    destination: row.destination_label || '-',
+    dates: `${formatDate(row.depart_date)} – ${formatDate(row.return_date)}`,
+    travelers: `${(row.adults || 1) + (row.children || 0)} people`,
     status: 'Ready',
-    projectedRevenue: 9850,
-  },
-  {
-    client: 'Michael Brown',
-    destination: 'Maldives',
-    dates: 'Jun 10 - Jun 20, 2026',
-    travelers: '2 people',
-    status: 'Pending',
-    projectedRevenue: 8400,
-  },
-  {
-    client: 'Emily Davis',
-    destination: 'New York, USA',
-    dates: 'Apr 5 - Apr 12, 2026',
-    travelers: '3 people',
-    status: 'Approved',
-    projectedRevenue: 5300,
-  },
-]
+    projectedRevenue: Number(row.budget_max) || 0,
+  }
+}
 
 export default function DashboardPage({ onNavigate }) {
-  const [rows, setRows] = useState(INITIAL_ROWS)
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`${API_URL}/requests`)
+      .then((r) => r.json())
+      .then((data) => setRows((data || []).map(mapRow)))
+      .catch((err) => console.error('Error cargando solicitudes:', err.message))
+      .finally(() => setLoading(false))
+  }, [])
 
   const handleStatusChange = (rowIndex, nextStatus) => {
-    setRows((currentRows) =>
-      currentRows.map((row, index) =>
-        index === rowIndex ? { ...row, status: nextStatus } : row,
-      ),
+    setRows((current) =>
+      current.map((row, i) => (i === rowIndex ? { ...row, status: nextStatus } : row)),
     )
   }
 
   return (
-    <AppLayout
-      pageTitle="Dashboard"
-      activeItem="dashboard"
-      onNavigate={onNavigate}
-    >
+    <AppLayout pageTitle="Dashboard" activeItem="dashboard" onNavigate={onNavigate}>
       <section className="dashboard-hero card">
         <div className="dashboard-hero-copy">
           <h2 className="card-title">AI Travel Operations Command Center</h2>
           <p className="card-subtitle">
-            Monitor request pipeline, coordinate package generation, and keep SLA
-            response times under control.
+            Monitor request pipeline, coordinate package generation, and keep SLA response times
+            under control.
           </p>
         </div>
         <div className="dashboard-hero-media">
           <img
             src="https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1200&q=80"
-            alt="Travel planning workstation with map and laptop"
+            alt="Travel planning workstation"
           />
         </div>
       </section>
 
       <StatsCards rows={rows} />
-      <RecentRequestsTable
-        onNewRequest={() => onNavigate('new-request')}
-        onViewRequest={(requestRow) =>
-          onNavigate(requestRow?.status === 'Processing' ? 'request-processing' : 'request-review')
-        }
-        onStatusChange={handleStatusChange}
-        rows={rows}
-      />
+
+      {loading ? (
+        <section className="card" style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+          Loading recent requests…
+        </section>
+      ) : (
+        <RecentRequestsTable
+          rows={rows}
+          onNewRequest={() => onNavigate('new-request')}
+          onViewRequest={(row) =>
+            onNavigate(row?.status === 'Processing' ? 'request-processing' : 'request-review')
+          }
+          onStatusChange={handleStatusChange}
+        />
+      )}
     </AppLayout>
   )
 }
-
