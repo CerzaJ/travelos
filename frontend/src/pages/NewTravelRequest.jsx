@@ -12,6 +12,7 @@ export default function NewTravelRequestPage({ onNavigate, onRequestSubmit }) {
   const [travelers, setTravelers] = useState('2-0')
   const [minBudget, setMinBudget] = useState('')
   const [maxBudget, setMaxBudget] = useState('')
+  const [currency, setCurrency] = useState('MXN')
   const [preferences, setPreferences] = useState('')
   const [submitError, setSubmitError] = useState('')
 
@@ -45,6 +46,7 @@ export default function NewTravelRequestPage({ onNavigate, onRequestSubmit }) {
       return_date: endDate,
       travelers: { adults, children },
       budget_mxn: budgetValue,
+      currency,
       preferences: {
         hotel_stars: 4,
         hotel_type: 'standard',
@@ -65,6 +67,7 @@ export default function NewTravelRequestPage({ onNavigate, onRequestSubmit }) {
       travelers,
       minBudget,
       maxBudget,
+      currency,
     }
 
     if (onRequestSubmit) onRequestSubmit(payload, formContext)
@@ -147,15 +150,29 @@ export default function NewTravelRequestPage({ onNavigate, onRequestSubmit }) {
 
         <section className="form-card">
           <h3 className="form-card-title">Budget</h3>
-          <div className="form-grid form-grid-2">
+          <div className="form-grid form-grid-3">
+            <div className="form-field">
+              <label className="form-label" htmlFor="currency">Currency</label>
+              <select id="currency" className="form-input" value={currency}
+                onChange={(e) => setCurrency(e.target.value)}>
+                <option value="MXN">MXN — Peso Mexicano</option>
+                <option value="USD">USD — US Dollar</option>
+                <option value="EUR">EUR — Euro</option>
+                <option value="GBP">GBP — British Pound</option>
+                <option value="CAD">CAD — Canadian Dollar</option>
+                <option value="COP">COP — Peso Colombiano</option>
+                <option value="ARS">ARS — Peso Argentino</option>
+                <option value="BRL">BRL — Real Brasileño</option>
+              </select>
+            </div>
             <div className="form-field">
               <label className="form-label" htmlFor="min-budget">Minimum budget</label>
-              <input id="min-budget" type="number" className="form-input" placeholder="$ 5,000"
+              <input id="min-budget" type="number" className="form-input" placeholder="5000"
                 value={minBudget} onChange={(e) => setMinBudget(e.target.value)} />
             </div>
             <div className="form-field">
               <label className="form-label" htmlFor="max-budget">Maximum budget</label>
-              <input id="max-budget" type="number" className="form-input" placeholder="$ 10,000"
+              <input id="max-budget" type="number" className="form-input" placeholder="10000"
                 value={maxBudget} onChange={(e) => setMaxBudget(e.target.value)} required />
             </div>
           </div>

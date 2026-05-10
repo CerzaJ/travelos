@@ -45,19 +45,13 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
   }, [packages])
   const [selectedPackageId, setSelectedPackageId] = useState(defaultPackageId)
   const [detailPackageId, setDetailPackageId] = useState(null)
-  const [imageLoadingMap, setImageLoadingMap] = useState({})
+  const [imageLoadingMap, setImageLoadingMap] = useState(() =>
+    packages.reduce((acc, pkg) => ({ ...acc, [pkg.id]: true }), {}),
+  )
 
   useEffect(() => {
     setSelectedPackageId(defaultPackageId)
   }, [defaultPackageId])
-
-  useEffect(() => {
-    const nextLoadingState = packages.reduce((accumulator, pkg) => {
-      accumulator[pkg.id] = true
-      return accumulator
-    }, {})
-    setImageLoadingMap(nextLoadingState)
-  }, [packages])
 
   const handleImageResolved = (packageId) => {
     setImageLoadingMap((previousState) => ({
@@ -192,7 +186,6 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
             >
               Back to packages
             </button>
-            <span className="package-detail-scope-label">Agent output: flights & accommodation only</span>
           </div>
 
           <div className="package-detail-grid">
@@ -226,13 +219,9 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
                       <time className="package-detail-leg-date">{formatShortDate(tripContext?.returnDate)}</time>
                     </div>
                     <p className="package-detail-leg-route">
-                      {destCode} → {originCode}{' '}
-                      <span className="package-detail-leg-muted">Mirror itinerary from agent quote</span>
+                      {destCode} → {originCode}
                     </p>
-                    <p className="package-detail-leg-airline">{flight.airline || 'Same carrier pairing'}</p>
-                    <p className="package-detail-leg-times">
-                      Times modeled on outbound availability for this itinerary window.
-                    </p>
+                    <p className="package-detail-leg-airline">{flight.airline || '-'}</p>
                   </article>
                 </div>
               </section>
@@ -243,12 +232,16 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
                   <h3 className="package-detail-card-title">Hotel</h3>
                 </header>
                 <div className="package-detail-hotel">
-                  <div
-                    className="package-detail-hotel-thumb"
-                    style={{
-                      backgroundImage: `url(${hotel.image_url || `https://picsum.photos/seed/${encodeURIComponent(hotel.name || destinationLabel)}/560/320`})`,
-                    }}
-                  />
+                  <div className="package-detail-hotel-thumb">
+                    <img
+                      src={hotel.image_url || `https://picsum.photos/seed/${encodeURIComponent(hotel.name || destinationLabel)}/560/320`}
+                      alt={hotel.name || destinationLabel}
+                      onError={(e) => {
+                        e.target.onerror = null
+                        e.target.src = `https://picsum.photos/seed/${encodeURIComponent(hotel.name || destinationLabel)}/560/320`
+                      }}
+                    />
+                  </div>
                   <div className="package-detail-hotel-body">
                     <h4 className="package-detail-hotel-name">{hotel.name || 'Property from agent quote'}</h4>
                     <p className="package-detail-hotel-meta">
@@ -265,9 +258,6 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
 
             <aside className="package-detail-aside card">
               <h3 className="package-detail-aside-title">Component breakdown</h3>
-              <p className="package-detail-aside-intro">
-                Subtotal reflecting only airfare and lodging from the orchestration response.
-              </p>
               <ul className="package-detail-price-list">
                 <li>
                   <span>Flights (quoted bucket)</span>
@@ -293,11 +283,7 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
               <button
                 type="button"
                 className="primary-button package-detail-appraise-btn"
-                onClick={() =>
-                  setApproveNote(
-                    'Approval recorded locally for this prototype. Backend handoff wires to orchestration in production.',
-                  )
-                }
+                onClick={() => setApproveNote('Package approved.')}
               >
                 Approve package
               </button>

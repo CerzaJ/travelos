@@ -85,6 +85,7 @@ class PlanTripRequest(BaseModel):
     return_date: str
     travelers: TravelersIn = Field(default_factory=TravelersIn)
     budget_mxn: float | None = None
+    currency: str = "MXN"
     preferences: PreferencesIn = Field(default_factory=PreferencesIn)
     notes: str | None = None       # "clientName | clientEmail | preferences"
     user_id: str | None = None     # Supabase auth user UUID (opcional)
@@ -244,7 +245,7 @@ async def _persist(req: PlanTripRequest, output: TravelQueryOutput) -> None:
             "infants_in_seat": 0,
             "infants_on_lap": 0,
             "budget_max": req.budget_mxn,
-            "currency": "MXN",
+            "currency": req.currency,
             "hl": "es",
             "gl": "mx",
             "travel_class": 1,
@@ -370,6 +371,7 @@ async def plan_trip(req: PlanTripRequest):
         end_date=req.return_date,
         travelers=travelers_label,
         max_budget=req.budget_mxn,
+        currency=req.currency,
         special_preferences=extras_str or None,
     )
 
@@ -469,3 +471,145 @@ async def get_requests(limit: int = 20):
         logger.error("Error leyendo quote_requests: %s", r.text[:200])
         return []
     return r.json()
+
+
+@app.get("/requests/{request_id}/packages")
+async def get_request_packages(request_id: str):
+    """Retorna los vuelos y hoteles guardados para un quote_request específico."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+    }
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        # 1. Quote request
+        r_req = await client.get(
+            f"{SUPABASE_URL}/rest/v1/QUOTE_REQUESTS",
+            headers=headers,
+            params={
+                "id": f"eq.{request_id}",
+                "select": "id,origin_label,destination_label,depart_date,return_date,adults,children,budget_max,currency,submitted_payload",
+                "limit": "1",
+            },
+        )
+        if r_req.status_code != 200 or not r_req.json():
+            raise HTTPException(status_code=404, detail="Request not found")
+        req_data = r_req.json()[0]
+
+        # 2. Quote job
+        r_job = await client.get(
+            f"{SUPABASE_URL}/rest/v1/QUOTE_JOBS",
+            headers=headers,
+            params={"quote_request_id": f"eq.{request_id}", "select": "id", "limit": "1"},
+        )
+        if r_job.status_code != 200 or not r_job.json():
+            raise HTTPException(status_code=404, detail="No packages found for this request")
+        job_id = r_job.json()[0]["id"]
+
+        # 3. Flight options y hotel options en paralelo
+        r_flights, r_hotels = await asyncio.gather(
+            client.get(
+                f"{SUPABASE_URL}/rest/v1/FLIGHT_OPTIONS",
+                headers=headers,
+                params={"job_id": f"eq.{job_id}", "select": "*"},
+            ),
+            client.get(
+                f"{SUPABASE_URL}/rest/v1/HOTEL_OPTIONS",
+                headers=headers,
+                params={"job_id": f"eq.{job_id}", "select": "*"},
+            ),
+        )
+
+    flights_raw = r_flights.json() if r_flights.status_code == 200 else []
+    hotels_raw = r_hotels.json() if r_hotels.status_code == 200 else []
+    destination = req_data.get("destination_label", "")
+    dep_date = req_data.get("depart_date", "")
+    ret_date = req_data.get("return_date", "")
+    currency = req_data.get("currency") or "MXN"
+
+    # Mapear vuelos desde datos raw de Supabase
+    flights: list[FlightOut] = []
+    for f in flights_raw:
+        segs = f.get("segments_jsonb") or []
+        raw = f.get("raw_option_jsonb") or {}
+        dep = _seg_time(segs, "departure_time") or _seg_time(segs, "departure")
+        arr = _seg_time(segs[-1:] if segs else [], "arrival_time") or _seg_time(segs[-1:] if segs else [], "arrival")
+        airline = (
+            raw.get("airline")
+            or (segs[0].get("airline") if segs and isinstance(segs[0], dict) else None)
+            or raw.get("name")
+            or "Unknown Airline"
+        )
+        dur_min = f.get("total_duration_min")
+        flights.append(FlightOut(
+            airline=airline,
+            price=f.get("total_price"),
+            departure_time=dep,
+            arrival_time=arr,
+            duration_hours=round(dur_min / 60, 1) if dur_min else None,
+        ))
+
+    # Mapear hoteles desde datos raw de Supabase
+    hotels: list[HotelOut] = []
+    for h in hotels_raw:
+        raw = h.get("raw_option_jsonb") or {}
+        images = raw.get("images", [])
+        image_url: str | None = None
+        if images and isinstance(images, list):
+            first = images[0] if isinstance(images[0], dict) else {}
+            image_url = first.get("thumbnail") or first.get("original_image")
+        stars = None
+        if h.get("overall_rating") is not None:
+            try:
+                stars = max(1, min(5, round(float(h["overall_rating"]))))
+            except Exception:
+                pass
+        hotels.append(HotelOut(
+            name=h.get("property_name", "Unknown Hotel"),
+            stars=stars,
+            price_per_night=h.get("nightly_rate") or h.get("total_rate"),
+            location=raw.get("location") or h.get("location") or destination,
+            image_url=image_url,
+        ))
+
+    # Calcular pricing
+    try:
+        nights = max(1, (date.fromisoformat(ret_date) - date.fromisoformat(dep_date)).days)
+    except Exception:
+        nights = 5
+
+    flights_total = sum(f.price or 0 for f in flights)
+    hotel_total = sum((h.price_per_night or 0) * nights for h in hotels[:1])
+    pricing = PricingOut(
+        flights_total=round(flights_total, 2),
+        hotel_total=round(hotel_total, 2),
+        extras_total=0.0,
+        grand_total=round(flights_total + hotel_total, 2),
+        currency=currency,
+    )
+
+    notes = ""
+    submitted = req_data.get("submitted_payload") or {}
+    if isinstance(submitted, dict):
+        notes = submitted.get("notes", "") or ""
+
+    return {
+        "request": {
+            "id": req_data["id"],
+            "origin": req_data.get("origin_label", ""),
+            "destination": destination,
+            "departure_date": dep_date,
+            "return_date": ret_date,
+            "adults": req_data.get("adults", 1),
+            "children": req_data.get("children", 0),
+            "budget_max": req_data.get("budget_max"),
+            "notes": notes,
+        },
+        "flights": [f.model_dump() for f in flights],
+        "hotels": [h.model_dump() for h in hotels],
+        "pricing": pricing.model_dump(),
+        "itinerary": _build_itinerary(destination, dep_date, ret_date).model_dump(),
+    }

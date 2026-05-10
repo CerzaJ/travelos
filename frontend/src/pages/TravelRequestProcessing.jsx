@@ -82,7 +82,7 @@ export default function TravelRequestProcessingPage({ onNavigate, onReviewReady,
     const { payload, formContext } = pendingRequest
     const {
       startDate, endDate, destination, departureCity,
-      clientName, preferences, travelers, minBudget, maxBudget,
+      clientName, preferences, travelers, minBudget, maxBudget, currency: formCurrency,
     } = formContext
 
     const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -97,7 +97,7 @@ export default function TravelRequestProcessingPage({ onNavigate, onReviewReady,
         const [adultsRaw, childrenRaw] = (travelers || '2-0').split('-')
         const adults   = Number(adultsRaw  || 2)
         const children = Number(childrenRaw || 0)
-        const currency = data.pricing?.currency || 'MXN'
+        const currency = data.pricing?.currency || formCurrency || 'MXN'
         const nights   = getDurationDays(startDate, endDate)
 
         const reviewData = {

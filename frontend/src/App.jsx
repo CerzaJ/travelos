@@ -9,6 +9,7 @@ import TravelRequestsPage from './pages/TravelRequests'
 import TravelRequestProcessingPage from './pages/TravelRequestProcessing'
 import TravelRequestReviewPage from './pages/TravelRequestReview'
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const REVIEW_STORAGE_KEY = 'travelos-latest-review'
 
 const readStoredReview = () => {
@@ -17,6 +18,75 @@ const readStoredReview = () => {
     return rawValue ? JSON.parse(rawValue) : null
   } catch {
     return null
+  }
+}
+
+const getDurationDays = (startDate, endDate) => {
+  if (!startDate || !endDate) return 1
+  return Math.max(1, Math.ceil((new Date(endDate) - new Date(startDate)) / 86400000))
+}
+
+const formatDateRange = (startDate, endDate) => {
+  if (!startDate || !endDate) return '-'
+  const fmt = (d) =>
+    new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return `${fmt(startDate)} – ${fmt(endDate)}`
+}
+
+const formatMoney = (amount, currency = 'MXN') => {
+  if (typeof amount !== 'number' || Number.isNaN(amount)) return '-'
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
+const buildReviewDataFromHistory = (data) => {
+  const { request, flights, hotels, pricing } = data
+  const { origin, destination, departure_date, return_date, adults, children, budget_max, notes } =
+    request
+  const currency = pricing?.currency || 'MXN'
+  const nights = getDurationDays(departure_date, return_date)
+
+  const sortedFlights = [...(flights || [])].sort((a, b) => (a.price || 0) - (b.price || 0))
+  const sortedHotels = [...(hotels || [])].sort(
+    (a, b) => (a.price_per_night || 0) - (b.price_per_night || 0),
+  )
+  const flight = sortedFlights[Math.floor((sortedFlights.length - 1) / 2)] || null
+  const hotel = sortedHotels[Math.floor((sortedHotels.length - 1) / 2)] || null
+  const totalPrice =
+    flight && hotel ? (flight.price || 0) + (hotel.price_per_night || 0) * nights : 0
+
+  const clientName = notes ? notes.split('|')[0]?.trim() : null
+
+  return {
+    requestSummary: {
+      destination,
+      dateRange: formatDateRange(departure_date, return_date),
+      travelers: `${adults || 1} Adults${(children || 0) > 0 ? `, ${children} Children` : ''}`,
+      budget: budget_max ? formatMoney(Number(budget_max), currency) : '-',
+      preferences: clientName || 'No additional preferences.',
+    },
+    tripContext: {
+      origin: origin || '',
+      destination: destination || '',
+      departureDate: departure_date,
+      returnDate: return_date,
+      nights,
+    },
+    packages: [
+      {
+        id: 'recommended',
+        title: 'Recommended Package',
+        recommended: true,
+        totalPrice,
+        currency,
+        flight,
+        hotel,
+        imageUrl: hotel?.image_url || null,
+      },
+    ],
   }
 }
 
@@ -33,20 +103,19 @@ function App() {
         setSessionUser({ email: session.user.email, name: session.user.user_metadata?.full_name })
         setCurrentPage('dashboard')
       }
-      // Registrar la página inicial para que el browser back funcione
       window.history.replaceState({ page: initialPage }, '')
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (!session) {
-        // Solo actuar en logout real — nunca en TOKEN_REFRESHED ni tab switch
         setSessionUser(null)
         setCurrentPage('login')
         window.history.replaceState({ page: 'login' }, '')
       }
     })
 
-    // Botón de regresar del browser — solo cuando el usuario lo presiona manualmente
     const onPopState = (e) => {
       const page = e.state?.page
       if (page) setCurrentPage(page)
@@ -70,6 +139,25 @@ function App() {
     setCurrentPage(target)
   }
 
+  const handleViewRequest = async (row) => {
+    if (row?.status === 'Processing') {
+      handleNavigate('request-processing')
+      return
+    }
+    if (row?.id) {
+      try {
+        const res = await fetch(`${API_URL}/requests/${row.id}/packages`)
+        if (res.ok) {
+          const data = await res.json()
+          handleReviewReady(buildReviewDataFromHistory(data))
+        }
+      } catch (e) {
+        console.error('Error loading packages:', e)
+      }
+    }
+    handleNavigate('request-review')
+  }
+
   const handleLogin = (userData) => {
     setSessionUser(userData)
     window.history.pushState({ page: 'dashboard' }, '')
@@ -81,7 +169,7 @@ function App() {
   }
 
   if (currentPage === 'travel-requests') {
-    return <TravelRequestsPage onNavigate={handleNavigate} />
+    return <TravelRequestsPage onNavigate={handleNavigate} onViewRequest={handleViewRequest} />
   }
 
   if (currentPage === 'new-request') {
@@ -111,7 +199,13 @@ function App() {
     return <SettingsComingSoonPage onNavigate={handleNavigate} />
   }
 
-  return <DashboardPage onNavigate={handleNavigate} sessionUser={sessionUser} />
+  return (
+    <DashboardPage
+      onNavigate={handleNavigate}
+      onViewRequest={handleViewRequest}
+      sessionUser={sessionUser}
+    />
+  )
 }
 
 export default App

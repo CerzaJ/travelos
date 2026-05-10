@@ -37,7 +37,6 @@ export default function AppLayout({ children, pageTitle, activeItem, onNavigate 
             <h1 className="page-title">{pageTitle}</h1>
           </div>
           <div className="topbar-right">
-            <button className="topbar-link">Help</button>
             <div className="avatar">JD</div>
           </div>
         </header>
