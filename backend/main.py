@@ -128,6 +128,7 @@ class PlanTripResponse(BaseModel):
     hotels: list[HotelOut]
     pricing: PricingOut
     itinerary: ItineraryOut
+    warnings: list[str] = Field(default_factory=list)
 
 
 # ── Helpers de mapeo ──────────────────────────────────────────────────────────
@@ -137,9 +138,22 @@ def _seg_time(segments: list | None, key: str) -> str | None:
         return None
     try:
         seg = segments[0] if isinstance(segments[0], dict) else {}
-        return seg.get(key) or seg.get(key.replace("_time", ""))
+        # Try flat keys first (some integrations store times directly)
+        val = seg.get(key) or seg.get(key.replace("_time", ""))
+        if val:
+            return val
+        # SerpAPI Google Flights nests times inside departure_airport / arrival_airport dicts
+        if "departure" in key:
+            airport = seg.get("departure_airport")
+            if isinstance(airport, dict):
+                return airport.get("time")
+        if "arrival" in key:
+            airport = seg.get("arrival_airport")
+            if isinstance(airport, dict):
+                return airport.get("time")
     except Exception:
-        return None
+        pass
+    return None
 
 
 def _map_flight(f: FlightOption) -> FlightOut:
@@ -414,6 +428,20 @@ async def plan_trip(req: PlanTripRequest):
     flights = [_map_flight(f) for f in output.flight_options]
     hotels = [_map_hotel(h, req.destination) for h in output.hotel_options]
 
+    # Si el agente no encontró nada en absoluto, devolver 422 con contexto
+    if not flights and not hotels:
+        warnings_text = "; ".join(output.warnings) if output.warnings else "No results from search tools."
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "NO_RESULTS",
+                "flights_found": False,
+                "hotels_found": False,
+                "warnings": output.warnings,
+                "message": f"The agent could not find flights or hotels for this request. {warnings_text}",
+            },
+        )
+
     # Calcular precios
     try:
         dep = date.fromisoformat(req.departure_date)
@@ -440,6 +468,7 @@ async def plan_trip(req: PlanTripRequest):
         hotels=hotels,
         pricing=pricing,
         itinerary=itinerary,
+        warnings=output.warnings or [],
     )
 
     # Guardar en Supabase en segundo plano (no bloquea la respuesta al usuario)

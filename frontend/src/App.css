@@ -402,6 +402,66 @@ body {
   resize: vertical;
 }
 
+/* ── Airport autocomplete ───────────────────────────────────────────────────── */
+.airport-search {
+  position: relative;
+}
+
+.airport-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  z-index: 100;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.airport-option {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.airport-option:hover,
+.airport-option--focused {
+  background: #f0f4ff;
+}
+
+.airport-iata {
+  font-size: 13px;
+  font-weight: 700;
+  color: #2563eb;
+  letter-spacing: 0.04em;
+}
+
+.airport-city {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.airport-country {
+  font-size: 12px;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
 .form-actions-row {
   display: flex;
   justify-content: flex-end;
@@ -843,22 +903,17 @@ body {
 }
 
 .dashboard-hero-copy {
-  padding: 24px;
+  padding: 16px 24px;
   display: grid;
   align-content: center;
   gap: 10px;
 }
 
-.dashboard-hero-copy .card-subtitle {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
-}
-
 .dashboard-hero-media img {
   width: 100%;
   height: 100%;
-  min-height: 190px;
+  min-height: 120px;
+  max-height: 140px;
   object-fit: cover;
   display: block;
 }
@@ -1008,7 +1063,7 @@ body {
   flex-direction: column;
   justify-content: flex-end;
   gap: 4px;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.05), rgba(15, 23, 42, 0.78));
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.0), rgba(15, 23, 42, 0.62));
 }
 
 .package-detail-hero-kicker {

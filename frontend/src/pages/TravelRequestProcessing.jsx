@@ -53,6 +53,8 @@ export default function TravelRequestProcessingPage({ onNavigate, onReviewReady,
   const [progress, setProgress]       = useState(5)
   const [elapsed, setElapsed]         = useState(0)
   const [error, setError]             = useState(null)
+  const [agentWarnings, setAgentWarnings] = useState([])
+  const [partialResult, setPartialResult] = useState(null)
   const doneRef                       = useRef(false)
 
   const activeStepIndex = Math.min(
@@ -92,7 +94,25 @@ export default function TravelRequestProcessingPage({ onNavigate, onReviewReady,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
-      .then((r) => { if (!r.ok) throw new Error(`Error ${r.status}`); return r.json() })
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}))
+          const detail = body?.detail
+          if (r.status === 422 && detail?.code === 'NO_RESULTS') {
+            const noFlights = !detail.flights_found
+            const noHotels  = !detail.hotels_found
+            const what = noFlights && noHotels
+              ? 'flights or hotels'
+              : noFlights ? 'flights' : 'hotels'
+            throw Object.assign(
+              new Error(`No ${what} found for this route.`),
+              { warnings: detail.warnings || [], partial: { noFlights, noHotels } },
+            )
+          }
+          throw new Error(detail?.message || `Server error ${r.status}`)
+        }
+        return r.json()
+      })
       .then((data) => {
         const [adultsRaw, childrenRaw] = (travelers || '2-0').split('-')
         const adults   = Number(adultsRaw  || 2)
@@ -116,24 +136,61 @@ export default function TravelRequestProcessingPage({ onNavigate, onReviewReady,
             nights,
           },
           packages: buildPackageOptions(data, startDate, endDate),
+          warnings: data.warnings || [],
         }
 
         if (onReviewReady) onReviewReady(reviewData)
         setProgress(100)
         setTimeout(() => onNavigate && onNavigate('request-review'), 500)
       })
-      .catch((err) => setError(err.message || 'Could not generate travel packages.'))
+      .catch((err) => {
+        setError(err.message || 'Could not generate travel packages.')
+        if (err.warnings?.length) setAgentWarnings(err.warnings)
+        if (err.partial) setPartialResult(err.partial)
+      })
   }, [pendingRequest])
 
   // ── Render de error ───────────────────────────────────────────────────────
   if (error) {
+    const noFlights = partialResult?.noFlights
+    const noHotels  = partialResult?.noHotels
+
+    const suggestions = []
+    if (noFlights || (!partialResult && true)) {
+      suggestions.push('Try a different currency (e.g. USD instead of MXN)')
+      suggestions.push('Check that origin and destination city names are correct')
+      suggestions.push('Try different travel dates')
+    }
+    if (noHotels) {
+      suggestions.push('Try a more specific destination city name')
+    }
+
     return (
       <AppLayout pageTitle="Travel Requests" activeItem="travel-requests" onNavigate={onNavigate}>
         <section className="processing-shell">
           <div className="processing-header">
-            <h2 className="processing-title">Something went wrong</h2>
+            <h2 className="processing-title">No results found</h2>
             <p className="processing-subtitle">{error}</p>
           </div>
+
+          {suggestions.length > 0 && (
+            <article className="card processing-progress-card">
+              <strong style={{ fontSize: 14 }}>Suggestions</strong>
+              <ul style={{ margin: '8px 0 0', paddingLeft: '1.2em', fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
+                {suggestions.map((s) => <li key={s}>{s}</li>)}
+              </ul>
+            </article>
+          )}
+
+          {agentWarnings.length > 0 && (
+            <article className="card processing-progress-card" style={{ borderLeft: '3px solid #f59e0b' }}>
+              <strong style={{ fontSize: 13, color: '#92400e' }}>Agent details</strong>
+              <ul style={{ margin: '6px 0 0', paddingLeft: '1.2em', fontSize: 12, color: '#78350f', lineHeight: 1.6 }}>
+                {agentWarnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            </article>
+          )}
+
           <div className="form-actions-row">
             <button className="secondary-button" onClick={() => onNavigate && onNavigate('new-request')}>
               Try again

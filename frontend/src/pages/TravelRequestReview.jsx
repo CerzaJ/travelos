@@ -144,9 +144,19 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
   }
 
   if (detailPackage && flightHotelBreakdown) {
-    const heroImage =
-      packageImageUrls[detailPackage.id] ||
-      `https://picsum.photos/seed/${encodeURIComponent(destinationLabel)}/1200/400`
+    const HERO_FALLBACKS = [
+      'photo-1507525428034-b723cf961d3e', // beach tropical
+      'photo-1480714378702-eba0c5723d95', // city aerial
+      'photo-1464822759023-fed622ff2c3b', // mountain lake
+      'photo-1519677100203-a0e668c92439', // europe city
+      'photo-1476514525405-8d4b2c7b4b4c', // coast aerial
+      'photo-1441974231531-c6227db76b6e', // forest path
+      'photo-1533105079780-92b9be482077', // beach ocean
+      'photo-1513635269975-59663e0ac1ad', // city skyline
+    ]
+    const fallbackIdx = destinationLabel.charCodeAt(0) % HERO_FALLBACKS.length
+    const heroFallback = `https://images.unsplash.com/${HERO_FALLBACKS[fallbackIdx]}?auto=format&fit=crop&w=1200&q=80`
+    const heroImage = detailPackage.imageUrl || heroFallback
     const flight = detailPackage.flight
     const hotel = detailPackage.hotel
     const originCode = tripContext?.origin?.slice(0, 3).toUpperCase() || 'ORG'
@@ -165,7 +175,8 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
               className="package-detail-hero-image"
               loading="lazy"
               onError={(e) => {
-                e.target.src = `https://picsum.photos/seed/${encodeURIComponent(destinationLabel)}/1200/400`
+                e.target.onerror = null
+                e.target.src = heroFallback
               }}
             />
             <div className="package-detail-hero-overlay">
@@ -207,11 +218,13 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
                         Non-stop · {flight.duration_hours ?? '—'}h block
                       </span>
                     </p>
-                    <p className="package-detail-leg-airline">{flight.airline || 'Carrier from agent payload'}</p>
-                    <p className="package-detail-leg-times">
-                      Departs <strong>{flight.departure_time || '—'}</strong> · Arrives{' '}
-                      <strong>{flight.arrival_time || '—'}</strong>
-                    </p>
+                    <p className="package-detail-leg-airline">{flight.airline || '—'}</p>
+                    {(flight.departure_time || flight.arrival_time) && (
+                      <p className="package-detail-leg-times">
+                        Departs <strong>{flight.departure_time || '—'}</strong> · Arrives{' '}
+                        <strong>{flight.arrival_time || '—'}</strong>
+                      </p>
+                    )}
                   </article>
                   <article className="package-detail-leg">
                     <div className="package-detail-leg-top">
@@ -221,7 +234,10 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
                     <p className="package-detail-leg-route">
                       {destCode} → {originCode}
                     </p>
-                    <p className="package-detail-leg-airline">{flight.airline || '-'}</p>
+                    <p className="package-detail-leg-airline">{flight.airline || '—'}</p>
+                    <p className="package-detail-leg-times" style={{ color: '#9ca3af' }}>
+                      Times confirmed at booking
+                    </p>
                   </article>
                 </div>
               </section>
@@ -249,7 +265,7 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
                       {hotel.location || reviewData.requestSummary.destination}
                     </p>
                     <p className="package-detail-hotel-stay">
-                      {flightHotelBreakdown.nights} nights · Priced nightly from agent output
+                      {flightHotelBreakdown.nights} nights
                     </p>
                   </div>
                 </div>
@@ -323,6 +339,17 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
             <p>{reviewData.requestSummary.preferences}</p>
           </div>
         </section>
+
+        {reviewData.warnings?.length > 0 && (
+          <section className="card" style={{ borderLeft: '3px solid #f59e0b', padding: '14px 18px' }}>
+            <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 600, color: '#92400e' }}>
+              Partial results — some data may be missing
+            </p>
+            <ul style={{ margin: 0, paddingLeft: '1.2em', fontSize: 12, color: '#78350f', lineHeight: 1.6 }}>
+              {reviewData.warnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          </section>
+        )}
 
         <section className="review-packages card">
           <div className="card-header">

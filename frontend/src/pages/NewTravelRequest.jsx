@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import AppLayout from '../components/Layout/AppLayout'
+import AirportSearch from '../components/AirportSearch'
 
 export default function NewTravelRequestPage({ onNavigate, onRequestSubmit }) {
   const [clientName, setClientName] = useState('')
   const [clientEmail, setClientEmail] = useState('')
   const [destination, setDestination] = useState('')
+  const [destinationDisplay, setDestinationDisplay] = useState('')
   const [departureCity, setDepartureCity] = useState('')
+  const [departureCityDisplay, setDepartureCityDisplay] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [travelers, setTravelers] = useState('2-0')
@@ -59,8 +62,8 @@ export default function NewTravelRequestPage({ onNavigate, onRequestSubmit }) {
     const formContext = {
       startDate,
       endDate,
-      destination,
-      departureCity,
+      destination: destinationDisplay || destination,
+      departureCity: departureCityDisplay || departureCity,
       clientName,
       clientEmail,
       preferences,
@@ -114,13 +117,27 @@ export default function NewTravelRequestPage({ onNavigate, onRequestSubmit }) {
           <div className="form-grid form-grid-2">
             <div className="form-field">
               <label className="form-label" htmlFor="destination">Destination</label>
-              <input id="destination" type="text" className="form-input" placeholder="Paris, France"
-                value={destination} onChange={(e) => setDestination(e.target.value)} required />
+              <AirportSearch
+                id="destination"
+                placeholder="Cancún, París, Miami…"
+                required
+                onSelect={(iata, display) => {
+                  setDestination(iata)
+                  setDestinationDisplay(display)
+                }}
+              />
             </div>
             <div className="form-field">
               <label className="form-label" htmlFor="departure-city">Departure city</label>
-              <input id="departure-city" type="text" className="form-input" placeholder="New York, USA"
-                value={departureCity} onChange={(e) => setDepartureCity(e.target.value)} required />
+              <AirportSearch
+                id="departure-city"
+                placeholder="Ciudad de México, Monterrey…"
+                required
+                onSelect={(iata, display) => {
+                  setDepartureCity(iata)
+                  setDepartureCityDisplay(display)
+                }}
+              />
             </div>
           </div>
           <div className="form-grid form-grid-3">

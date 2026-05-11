@@ -79,15 +79,11 @@ export default function DashboardPage({ onNavigate, onViewRequest }) {
       <section className="dashboard-hero card">
         <div className="dashboard-hero-copy">
           <h2 className="card-title">AI Travel Operations Command Center</h2>
-          <p className="card-subtitle">
-            Monitor request pipeline, coordinate package generation, and keep SLA response times
-            under control.
-          </p>
         </div>
         <div className="dashboard-hero-media">
           <img
-            src="https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1200&q=80"
-            alt="Travel planning workstation"
+            src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80"
+            alt="Tropical beach destination"
           />
         </div>
       </section>
