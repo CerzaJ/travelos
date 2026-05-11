@@ -23,14 +23,27 @@ export default function NewTravelRequestPage({ onNavigate, onRequestSubmit }) {
     event.preventDefault()
     setSubmitError('')
 
-    if (!startDate || !endDate || startDate > endDate) {
-      setSubmitError('Please provide a valid travel date range.')
+    const today = new Date().toISOString().split('T')[0]
+    if (!startDate || !endDate) {
+      setSubmitError('Por favor ingresa las fechas de viaje.')
+      return
+    }
+    if (startDate < today) {
+      setSubmitError('La fecha de salida debe ser a partir de hoy.')
+      return
+    }
+    if (startDate >= endDate) {
+      setSubmitError('La fecha de regreso debe ser posterior a la de salida.')
+      return
+    }
+    if (departureCity && destination && departureCity.toUpperCase() === destination.toUpperCase()) {
+      setSubmitError('El origen y el destino no pueden ser iguales.')
       return
     }
 
     const budgetValue = Number(maxBudget || minBudget)
     if (!budgetValue || budgetValue <= 0) {
-      setSubmitError('Please provide a valid budget amount.')
+      setSubmitError('Por favor ingresa un presupuesto válido.')
       return
     }
 
@@ -167,6 +180,7 @@ export default function NewTravelRequestPage({ onNavigate, onRequestSubmit }) {
 
         <section className="form-card">
           <h3 className="form-card-title">Budget</h3>
+          <p className="form-hint">💡 Si no encuentras vuelos con MXN, intenta con USD — tiene mayor cobertura de rutas internacionales.</p>
           <div className="form-grid form-grid-3">
             <div className="form-field">
               <label className="form-label" htmlFor="currency">Currency</label>

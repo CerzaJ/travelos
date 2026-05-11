@@ -105,19 +105,30 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
   }
 
   if (detailPackageId && detailPackage && !flightHotelBreakdown) {
+    const missingFlights = !detailPackage.flight
+    const missingHotels  = !detailPackage.hotel
     return (
       <AppLayout pageTitle="Travel Requests" activeItem="travel-requests" onNavigate={onNavigate}>
         <section className="card package-detail-empty">
-          <h2 className="card-title">Flight or hotel unavailable</h2>
+          <h2 className="card-title">Resultados incompletos</h2>
           <p className="card-subtitle">
-            The agent payload must include paired flight and hotel records to compute this breakdown.
+            {missingFlights && missingHotels
+              ? 'El agente no encontró vuelos ni hoteles para esta ruta.'
+              : missingFlights
+              ? 'Se encontraron hoteles pero no vuelos para esta ruta.'
+              : 'Se encontraron vuelos pero no hoteles para esta ruta.'}
           </p>
-          <div className="form-actions-row">
+          <ul style={{ margin: '12px 0 0', paddingLeft: '1.2em', fontSize: 13, color: '#374151', lineHeight: 1.8 }}>
+            <li>Intenta con otra moneda — USD suele tener mejor cobertura internacional</li>
+            <li>Verifica que el nombre de la ciudad de origen y destino sea correcto</li>
+            <li>Prueba con fechas diferentes o un rango más amplio</li>
+          </ul>
+          <div className="form-actions-row" style={{ marginTop: 20 }}>
             <button type="button" className="secondary-button" onClick={() => setDetailPackageId(null)}>
-              Back to packages
+              Volver
             </button>
             <button type="button" className="primary-button" onClick={() => onNavigate && onNavigate('new-request')}>
-              New request
+              Nueva búsqueda
             </button>
           </div>
         </section>
@@ -394,22 +405,26 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
                 <h3 className="package-title">{pkg.title}</h3>
                 <p className="package-price">{formatMoney(pkg.totalPrice, pkg.currency)}</p>
                 <div className="package-meta">
-                  <p>{pkg.hotel?.name || 'Hotel details pending'}</p>
-                  <p>{pkg.flight?.airline || 'Flight details pending'}</p>
+                  <p>{pkg.hotel?.name || <span style={{ color: '#f59e0b' }}>No hotel found</span>}</p>
+                  <p>{pkg.flight?.airline || <span style={{ color: '#f59e0b' }}>No flight found</span>}</p>
                 </div>
                 <div className="package-card-actions">
-                  <button
-                    type="button"
-                    className="package-view-details-btn"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      event.preventDefault()
-                      setSelectedPackageId(pkg.id)
-                      setDetailPackageId(pkg.id)
-                    }}
-                  >
-                    View Details
-                  </button>
+                  {pkg.flight && pkg.hotel ? (
+                    <button
+                      type="button"
+                      className="package-view-details-btn"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        event.preventDefault()
+                        setSelectedPackageId(pkg.id)
+                        setDetailPackageId(pkg.id)
+                      }}
+                    >
+                      View Details
+                    </button>
+                  ) : (
+                    <span style={{ fontSize: 12, color: '#9ca3af' }}>Intenta con otra moneda o ruta</span>
+                  )}
                 </div>
               </article>
             ))}

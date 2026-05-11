@@ -360,6 +360,13 @@ body {
   font-weight: 600;
 }
 
+.form-hint {
+  margin: -4px 0 12px;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
 .form-grid {
   display: grid;
   gap: 12px 16px;
