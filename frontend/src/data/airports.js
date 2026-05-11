@@ -104,6 +104,14 @@ export const AIRPORTS = [
   { iata: 'SOF', city: 'Sofía', name: 'Sofia Airport', country: 'Bulgaria' },
   { iata: 'HER', city: 'Heraklion', name: 'Nikos Kazantzakis', country: 'Grecia' },
   { iata: 'SKG', city: 'Tesalónica', name: 'Makedonia', country: 'Grecia' },
+  { iata: 'JMK', city: 'Mykonos', name: 'Mykonos Island National', country: 'Grecia' },
+  { iata: 'JSI', city: 'Skiathos', name: 'Alexandros Papadiamantis', country: 'Grecia' },
+  { iata: 'RHO', city: 'Rodas', name: 'Diagoras', country: 'Grecia' },
+  { iata: 'CFU', city: 'Corfú', name: 'Ioannis Kapodistrias', country: 'Grecia' },
+  { iata: 'ZTH', city: 'Zakynthos', name: 'Dionysios Solomos', country: 'Grecia' },
+  { iata: 'KGS', city: 'Kos', name: 'Hippocrates', country: 'Grecia' },
+  { iata: 'SMI', city: 'Samos', name: 'Aristarchos de Samos', country: 'Grecia' },
+  { iata: 'JTR', city: 'Santorini', name: 'Santorini', country: 'Grecia' },
 
   // ── América Latina ───────────────────────────────────────────────────────────
   { iata: 'BOG', city: 'Bogotá', name: 'El Dorado Internacional', country: 'Colombia' },

@@ -226,7 +226,7 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
                     <p className="package-detail-leg-route">
                       {originCode} → {destCode}{' '}
                       <span className="package-detail-leg-muted">
-                        Non-stop · {flight.duration_hours ?? '—'}h block
+                        {flight.via ? `Via ${flight.via}` : 'Non-stop'} · {flight.duration_hours ?? '—'}h
                       </span>
                     </p>
                     <p className="package-detail-leg-airline">{flight.airline || '—'}</p>

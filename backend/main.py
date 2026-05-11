@@ -99,6 +99,7 @@ class FlightOut(BaseModel):
     departure_time: str | None = None
     arrival_time: str | None = None
     duration_hours: float | None = None
+    via: str | None = None
 
 class HotelOut(BaseModel):
     name: str
@@ -158,6 +159,7 @@ def _seg_time(segments: list | None, key: str) -> str | None:
 
 def _map_flight(f: FlightOption) -> FlightOut:
     segs = f.segments_jsonb or []
+    raw = f.raw_option_jsonb or {}
     dep = _seg_time(segs, "departure_time") or _seg_time(segs, "departure")
     last = segs[-1:] if segs else []
     arr = _seg_time(last, "arrival_time") or _seg_time(last, "arrival")
@@ -167,6 +169,7 @@ def _map_flight(f: FlightOption) -> FlightOut:
         departure_time=dep,
         arrival_time=arr,
         duration_hours=round(f.total_duration_min / 60, 1) if f.total_duration_min else None,
+        via=raw.get("_via_hub"),
     )
 
 
@@ -463,12 +466,18 @@ async def plan_trip(req: PlanTripRequest):
     )
     itinerary = _build_itinerary(req.destination, req.departure_date, req.return_date)
 
+    _internal_phrases = ("LLM", "heuristic", "structured result", "structured form", "serpapi", "SerpAPI")
+    user_warnings = [
+        w for w in (output.warnings or [])
+        if not any(p.lower() in w.lower() for p in _internal_phrases)
+    ]
+
     response = PlanTripResponse(
         flights=flights,
         hotels=hotels,
         pricing=pricing,
         itinerary=itinerary,
-        warnings=output.warnings or [],
+        warnings=user_warnings,
     )
 
     # Guardar en Supabase en segundo plano (no bloquea la respuesta al usuario)

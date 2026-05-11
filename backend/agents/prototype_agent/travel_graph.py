@@ -271,15 +271,17 @@ def _tool_error_messages(data: dict[str, Any]) -> list[str]:
     msgs: list[str] = []
     if not isinstance(data, dict):
         return msgs
-    http_err = data.get("_http_error")
-    if isinstance(http_err, str) and http_err:
-        msgs.append(f"Travel search HTTP issue: {http_err}")
-        snip = data.get("_response_snippet")
-        if isinstance(snip, str) and snip:
-            msgs.append(f"Response snippet: {snip}")
-    api_err = data.get("_serpapi_error_message")
+    if isinstance(data.get("_http_error"), str):
+        msgs.append("Error de conexión al buscar. Intenta de nuevo en unos momentos.")
+    api_err = data.get("_serpapi_error_message", "")
     if isinstance(api_err, str) and api_err:
-        msgs.append(f"SerpAPI error: {api_err}")
+        low = api_err.lower()
+        if "api key" in low or "invalid" in low:
+            msgs.append("Clave de búsqueda no válida. Contacta al administrador.")
+        elif "quota" in low or "limit" in low or "rate" in low:
+            msgs.append("Límite de búsquedas alcanzado. Intenta en unos minutos.")
+        else:
+            msgs.append("No se encontraron resultados para los parámetros indicados.")
     return msgs
 
 
@@ -476,6 +478,156 @@ def _merge_plans(llm_plan: ParsedIntentPlan | None, heuristic_plan: ParsedIntent
     return merged
 
 
+# ── Hub fallback: connecting flight search ─────────────────────────────────────
+
+_AIRPORT_REGION: dict[str, str] = {
+    # México
+    "MEX": "mx", "CUN": "mx", "GDL": "mx", "MTY": "mx", "TIJ": "mx",
+    "PVR": "mx", "SJD": "mx", "MZT": "mx", "MID": "mx", "BJX": "mx",
+    # Centroamérica y Caribe
+    "GUA": "ca", "SAL": "ca", "SJO": "ca", "PTY": "ca", "MGA": "ca",
+    "TGU": "ca", "BZE": "ca", "HAV": "ca", "SDQ": "ca", "SJU": "ca",
+    "PUJ": "ca", "NAS": "ca", "MBJ": "ca",
+    # Sudamérica
+    "BOG": "sa", "GRU": "sa", "GIG": "sa", "EZE": "sa", "SCL": "sa",
+    "LIM": "sa", "UIO": "sa", "GYE": "sa", "MVD": "sa", "CCS": "sa",
+    "MDE": "sa", "CLO": "sa", "CTG": "sa", "BSB": "sa", "FOR": "sa",
+    # EE.UU. y Canadá
+    "JFK": "us", "LAX": "us", "MIA": "us", "ORD": "us", "DFW": "us",
+    "SFO": "us", "IAH": "us", "ATL": "us", "DEN": "us", "SEA": "us",
+    "LAS": "us", "BOS": "us", "PHX": "us", "MCO": "us", "YYZ": "us",
+    "YVR": "us", "YUL": "us",
+    # Europa
+    "LHR": "eu", "CDG": "eu", "MAD": "eu", "FCO": "eu", "AMS": "eu",
+    "FRA": "eu", "MXP": "eu", "BCN": "eu", "MUC": "eu", "ZRH": "eu",
+    "VIE": "eu", "LIS": "eu", "BRU": "eu", "IST": "eu", "ATH": "eu",
+    "DUB": "eu", "CPH": "eu", "ARN": "eu", "OSL": "eu",
+    # Asia
+    "NRT": "as", "HND": "as", "ICN": "as", "PEK": "as", "PVG": "as",
+    "HKG": "as", "SIN": "as", "BKK": "as", "KUL": "as", "CGK": "as",
+    "MNL": "as", "DEL": "as", "BOM": "as", "KIX": "as", "DPS": "as",
+    "SGN": "as", "HAN": "as",
+    # Medio Oriente
+    "DXB": "me", "DOH": "me", "AUH": "me", "RUH": "me", "JED": "me",
+    "IST": "me",
+    # Oceanía
+    "SYD": "oc", "MEL": "oc", "BNE": "oc", "PER": "oc", "AKL": "oc",
+    # África
+    "JNB": "af", "CPT": "af", "CAI": "af", "CMN": "af", "NBO": "af",
+}
+
+_REGION_HUBS: dict[frozenset, list[str]] = {
+    frozenset(["mx", "as"]):  ["LAX", "SFO", "JFK", "ORD"],
+    frozenset(["ca", "as"]):  ["LAX", "MIA", "JFK"],
+    frozenset(["sa", "as"]):  ["MIA", "LAX", "JFK"],
+    frozenset(["mx", "eu"]):  ["JFK", "MIA", "MAD"],
+    frozenset(["ca", "eu"]):  ["MIA", "JFK", "MAD"],
+    frozenset(["sa", "eu"]):  ["MIA", "MAD", "JFK"],
+    frozenset(["mx", "me"]):  ["JFK", "MIA", "LHR"],
+    frozenset(["ca", "me"]):  ["MIA", "JFK", "LHR"],
+    frozenset(["sa", "me"]):  ["MIA", "JFK", "LHR"],
+    frozenset(["mx", "oc"]):  ["LAX", "SFO", "SYD"],
+    frozenset(["ca", "oc"]):  ["LAX", "MIA"],
+    frozenset(["sa", "oc"]):  ["LAX", "SYD"],
+    frozenset(["us", "as"]):  ["LAX", "SFO", "ORD", "JFK"],
+    frozenset(["us", "me"]):  ["JFK", "LHR", "FRA"],
+    frozenset(["us", "af"]):  ["JFK", "LHR", "CDG"],
+    frozenset(["eu", "as"]):  ["DXB", "DOH", "IST"],
+    frozenset(["eu", "oc"]):  ["DXB", "SIN"],
+    frozenset(["as", "oc"]):  ["SIN", "BKK"],
+    frozenset(["me", "as"]):  ["SIN", "BKK"],
+    frozenset(["mx", "af"]):  ["JFK", "MIA", "LHR"],
+    frozenset(["ca", "af"]):  ["MIA", "JFK", "LHR"],
+    frozenset(["sa", "af"]):  ["MIA", "LHR", "JNB"],
+}
+
+
+def _hub_candidates(origin: str, destination: str) -> list[str]:
+    o = _AIRPORT_REGION.get(origin.upper())
+    d = _AIRPORT_REGION.get(destination.upper())
+    if not o or not d or o == d:
+        return []
+    key = frozenset([o, d])
+    return [
+        h for h in _REGION_HUBS.get(key, [])
+        if h not in (origin.upper(), destination.upper())
+    ][:3]
+
+
+def _try_via_hub(
+    parsed: "TravelQueryInput",
+    base_payload: dict,
+    outbound_date: str,
+    runner: "FlightToolRunner",
+) -> "dict | None":
+    """Try finding flights via hub airports when direct route returns empty."""
+    origin = (parsed.origin or "").upper()
+    destination = (parsed.destination or "").upper()
+    hubs = _hub_candidates(origin, destination)
+
+    for hub in hubs:
+        try:
+            leg1 = _safe_json_loads(
+                search_google_flights.invoke({
+                    **base_payload,
+                    "arrival_id": hub,
+                    "type": 2,
+                    "return_date": "",
+                })
+            )
+            l1 = (leg1.get("best_flights") or []) + (leg1.get("other_flights") or []) + (leg1.get("flights") or [])
+            if not l1:
+                continue
+
+            leg2 = _safe_json_loads(
+                search_google_flights.invoke({
+                    **base_payload,
+                    "departure_id": hub,
+                    "type": 2,
+                    "return_date": "",
+                })
+            )
+            l2 = (leg2.get("best_flights") or []) + (leg2.get("other_flights") or []) + (leg2.get("flights") or [])
+            if not l2:
+                continue
+
+            f1, f2 = l1[0], l2[0]
+
+            def _price(f: dict) -> float | None:
+                try:
+                    return float(f["price"])
+                except Exception:
+                    return None
+
+            p1, p2 = _price(f1), _price(f2)
+            combined_price = (p1 + p2) if (p1 is not None and p2 is not None) else None
+            dur1 = f1.get("total_duration") or 0
+            dur2 = f2.get("total_duration") or 0
+
+            combined_flight = {
+                "flights": (f1.get("flights") or []) + (f2.get("flights") or []),
+                "price": combined_price,
+                "total_duration": dur1 + dur2 + 120,
+                "layovers": [{"id": hub, "duration": 120, "name": hub}],
+                "_via_hub": hub,
+                "type": f"Connecting via {hub}",
+            }
+
+            return {
+                "search_parameters": {
+                    "currency": base_payload.get("currency", "USD"),
+                    "_via_hub": hub,
+                },
+                "best_flights": [combined_flight],
+                "other_flights": [],
+                "flights": [],
+            }
+        except Exception:
+            continue
+
+    return None
+
+
 # 3-letter uppercase strings that are NOT IATA airport codes and must be rejected.
 _NOT_IATA = frozenset({
     # Currency codes
@@ -643,9 +795,9 @@ def _llm_parser_planner_node(state: TravelGraphState) -> TravelGraphState:
     heuristic = _heuristic_plan(composite)
     llm_result = _llm_plan(composite)
     if llm_parser is None:
-        warnings.append("LLM parser unavailable; structured form + heuristic/date parsing applied.")
+        logger.warning("LLM parser unavailable; running in heuristic-only mode.")
     elif llm_result is None:
-        warnings.append("LLM parser returned no structured result; falling back to heuristic only.")
+        logger.warning("LLM parser returned no structured result; using heuristic fallback.")
     plan = _merge_plans(llm_result, heuristic)
 
     plan = _overlay_structured(plan, seed)
@@ -690,7 +842,7 @@ def _input_guard_node(state: TravelGraphState) -> TravelGraphState:
     missing = state.get("missing_fields") or []
     if missing:
         missing_summary = ", ".join(str(f.field) for f in missing)
-        warnings.append(f"Missing required fields: {missing_summary}")
+        warnings.append(f"Información incompleta: {missing_summary}. Verifica origen, destino y fechas.")
     return {"warnings": warnings}
 
 
@@ -729,7 +881,7 @@ def _flight_node(state: TravelGraphState) -> TravelGraphState:
     req = _maybe_travel_request(state.get("travel_request"))
 
     if not (parsed.origin and parsed.destination and parsed.depart_date):
-        flight_warnings.append("Missing origin/destination/depart_date for flights.")
+        flight_warnings.append("Faltan datos de origen, destino o fecha para buscar vuelos.")
         return {"flight_warnings": flight_warnings, "flight_tool_result": {}}
 
     adults = _parse_adults(req, parsed.preferences)
@@ -756,13 +908,43 @@ def _flight_node(state: TravelGraphState) -> TravelGraphState:
     try:
         result = flight_runner.run(payload)
         flight_warnings.extend(_tool_error_messages(result))
+
+        # If direct search returned nothing, try connecting via hub airports
+        direct_hits = (
+            len(result.get("best_flights") or []) +
+            len(result.get("other_flights") or []) +
+            len(result.get("flights") or [])
+        )
+        if direct_hits == 0 and not _tool_error_messages(result):
+            flight_warnings.append(
+                f"No direct flights found for {parsed.origin} → {parsed.destination}. "
+                "Searching connecting routes via hub airports…"
+            )
+            hub_payload = {
+                "departure_id": parsed.origin,
+                "outbound_date": parsed.depart_date,
+                "adults": adults,
+                "currency": currency,
+                "gl": "us",   # broader coverage for international hub searches
+                "hl": hl,
+                "max_results": 3,
+            }
+            hub_result = _try_via_hub(parsed, hub_payload, parsed.depart_date, flight_runner)
+            if hub_result:
+                hub = hub_result.get("search_parameters", {}).get("_via_hub", "hub")
+                flight_warnings.append(f"Found connecting flights via {hub}.")
+                result = hub_result
+            else:
+                flight_warnings.append("No connecting routes found for this destination.")
+
         return {
             "flight_tool_result": result,
             "flight_warnings": flight_warnings,
             "meta_timing_flight_ms": int((time.time() - started) * 1000),
         }
     except Exception as exc:
-        flight_warnings.append(f"Flight tool error: {exc}")
+        logger.error("Flight tool error: %s", exc)
+        flight_warnings.append("Error al buscar vuelos. Intenta con otra moneda o fechas distintas.")
         return {
             "flight_tool_result": {},
             "flight_warnings": flight_warnings,
@@ -783,7 +965,7 @@ def _hotel_node(state: TravelGraphState) -> TravelGraphState:
     req = _maybe_travel_request(state.get("travel_request"))
 
     if not (parsed.hotel_city and parsed.hotel_checkin and parsed.hotel_checkout):
-        hotel_warnings.append("Missing hotel_city/hotel_checkin/hotel_checkout for hotels.")
+        hotel_warnings.append("Faltan datos de ciudad, entrada o salida para buscar hoteles.")
         return {"hotel_warnings": hotel_warnings, "hotel_tool_result": {}}
 
     started = time.time()
@@ -812,7 +994,8 @@ def _hotel_node(state: TravelGraphState) -> TravelGraphState:
             "meta_timing_hotel_ms": int((time.time() - started) * 1000),
         }
     except Exception as exc:
-        hotel_warnings.append(f"Hotel tool failed: {exc}")
+        logger.error("Hotel tool error: %s", exc)
+        hotel_warnings.append("Error al buscar hoteles. Intenta con otro nombre de ciudad o moneda.")
         return {"hotel_tool_result": {}, "hotel_warnings": hotel_warnings}
 
 

@@ -3,7 +3,7 @@ import AppLayout from '../components/Layout/AppLayout'
 
 const AGENT_STEPS = [
   { id: 'parser',     name: 'Parser',     detail: 'Analyzing request and extracting travel parameters.' },
-  { id: 'flights',    name: 'Flights',    detail: 'Searching available flights via SerpAPI.' },
+  { id: 'flights',    name: 'Flights',    detail: 'Searching available flights for your route.' },
   { id: 'hotels',     name: 'Hotels',     detail: 'Finding hotels at your destination.' },
   { id: 'summarizer', name: 'Summarizer', detail: 'Aggregating results and computing package tiers.' },
   { id: 'writer',     name: 'Writer',     detail: 'Polishing output with AI language model.' },
@@ -184,7 +184,7 @@ export default function TravelRequestProcessingPage({ onNavigate, onReviewReady,
 
           {agentWarnings.length > 0 && (
             <article className="card processing-progress-card" style={{ borderLeft: '3px solid #f59e0b' }}>
-              <strong style={{ fontSize: 13, color: '#92400e' }}>Agent details</strong>
+              <strong style={{ fontSize: 13, color: '#92400e' }}>Detalles del error</strong>
               <ul style={{ margin: '6px 0 0', paddingLeft: '1.2em', fontSize: 12, color: '#78350f', lineHeight: 1.6 }}>
                 {agentWarnings.map((w, i) => <li key={i}>{w}</li>)}
               </ul>
