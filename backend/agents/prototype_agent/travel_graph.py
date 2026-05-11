@@ -502,6 +502,12 @@ _AIRPORT_REGION: dict[str, str] = {
     "FRA": "eu", "MXP": "eu", "BCN": "eu", "MUC": "eu", "ZRH": "eu",
     "VIE": "eu", "LIS": "eu", "BRU": "eu", "IST": "eu", "ATH": "eu",
     "DUB": "eu", "CPH": "eu", "ARN": "eu", "OSL": "eu",
+    # Islas mediterráneas y destinos turísticos europeos
+    "JMK": "eu", "HER": "eu", "SKG": "eu", "RHO": "eu", "CFU": "eu",
+    "ZTH": "eu", "KGS": "eu", "CHQ": "eu", "JTR": "eu", "MJT": "eu",
+    "PMI": "eu", "IBZ": "eu", "MAH": "eu", "LPA": "eu", "TFS": "eu",
+    "ACE": "eu", "FUE": "eu", "VCE": "eu", "NAP": "eu", "CTA": "eu",
+    "PSA": "eu", "BRI": "eu", "OLB": "eu", "CAG": "eu",
     # Asia
     "NRT": "as", "HND": "as", "ICN": "as", "PEK": "as", "PVG": "as",
     "HKG": "as", "SIN": "as", "BKK": "as", "KUL": "as", "CGK": "as",
@@ -724,6 +730,80 @@ def _apply_nl_date_backfill(plan: ParsedIntentPlan, composite: str) -> ParsedInt
     return plan.model_copy(update=merge) if merge else plan
 
 
+_IATA_CITY_MAP: dict[str, str] = {
+    # México
+    "MEX": "Ciudad de Mexico", "CUN": "Cancun", "GDL": "Guadalajara",
+    "MTY": "Monterrey", "TIJ": "Tijuana", "PVR": "Puerto Vallarta",
+    "SJD": "Los Cabos", "MZT": "Mazatlan", "MID": "Merida",
+    # EE.UU.
+    "JFK": "New York", "LAX": "Los Angeles", "ORD": "Chicago",
+    "MIA": "Miami", "ATL": "Atlanta", "DFW": "Dallas", "SFO": "San Francisco",
+    "LAS": "Las Vegas", "SEA": "Seattle", "BOS": "Boston", "DEN": "Denver",
+    "IAH": "Houston", "PHX": "Phoenix", "MCO": "Orlando",
+    # Canadá
+    "YYZ": "Toronto", "YVR": "Vancouver", "YUL": "Montreal",
+    # Europa continental
+    "LHR": "London", "CDG": "Paris", "MAD": "Madrid", "FCO": "Rome",
+    "AMS": "Amsterdam", "FRA": "Frankfurt", "MXP": "Milan", "BCN": "Barcelona",
+    "MUC": "Munich", "ZRH": "Zurich", "VIE": "Vienna", "LIS": "Lisbon",
+    "BRU": "Brussels", "ATH": "Athens", "DUB": "Dublin", "CPH": "Copenhagen",
+    "ARN": "Stockholm", "OSL": "Oslo",
+    # Islas griegas
+    "JMK": "Mykonos", "HER": "Heraklion", "SKG": "Thessaloniki",
+    "RHO": "Rhodes", "CFU": "Corfu", "ZTH": "Zakynthos", "KGS": "Kos",
+    "CHQ": "Chania", "JTR": "Santorini", "MJT": "Mytilene",
+    # Islas españolas
+    "PMI": "Palma de Mallorca", "IBZ": "Ibiza", "MAH": "Menorca",
+    "LPA": "Las Palmas", "TFS": "Tenerife", "ACE": "Lanzarote", "FUE": "Fuerteventura",
+    # Italia islas/ciudades
+    "VCE": "Venecia", "NAP": "Napoles", "CTA": "Catania",
+    # Turquía
+    "IST": "Istanbul",
+    # Asia
+    "NRT": "Tokyo", "HND": "Tokyo", "ICN": "Seoul", "PEK": "Beijing",
+    "PVG": "Shanghai", "HKG": "Hong Kong", "SIN": "Singapore",
+    "BKK": "Bangkok", "KUL": "Kuala Lumpur", "DEL": "Nueva Delhi",
+    "BOM": "Mumbai", "DPS": "Bali", "MNL": "Manila",
+    # Medio Oriente
+    "DXB": "Dubai", "DOH": "Doha", "AUH": "Abu Dhabi",
+    # América del Sur
+    "GRU": "Sao Paulo", "GIG": "Rio de Janeiro", "EZE": "Buenos Aires",
+    "BOG": "Bogota", "LIM": "Lima", "SCL": "Santiago", "MVD": "Montevideo",
+    # Caribe / Centroamérica
+    "HAV": "Habana", "SJU": "San Juan", "CCS": "Caracas",
+    "PTY": "Panama", "SJO": "San Jose",
+    # África
+    "JNB": "Johannesburg", "CAI": "Cairo", "CMN": "Casablanca",
+    # Oceanía
+    "SYD": "Sydney", "MEL": "Melbourne", "AKL": "Auckland",
+}
+
+
+def _iata_to_city(code: str) -> str:
+    city = _IATA_CITY_MAP.get(code.upper())
+    if city:
+        return city
+    if llm_parser is not None:
+        try:
+            result = llm_parser.invoke(
+                f"What city does the airport with IATA code {code} serve? "
+                "Reply with just the city name, nothing else. Example: Paris"
+            )
+            content = (result.content if hasattr(result, "content") else str(result)).strip()
+            if content:
+                return content.split(",")[0].strip()
+        except Exception:
+            pass
+    return code
+
+
+def _resolve_hotel_city(city: str) -> str:
+    part = city.split(",")[0].strip()
+    if re.match(r'^[A-Z]{3}$', part) and part not in _NOT_IATA:
+        return _iata_to_city(part)
+    return part
+
+
 def _apply_package_invariants(plan: ParsedIntentPlan) -> ParsedIntentPlan:
     # Respect explicit flight-only or hotel-only intent from NL; only default to "both".
     explicit_single = plan.intent in {"flight", "hotel"}
@@ -734,7 +814,7 @@ def _apply_package_invariants(plan: ParsedIntentPlan) -> ParsedIntentPlan:
     dest = plan.destination
     hc = plan.hotel_city
     if dest and not hc:
-        u["hotel_city"] = _primary_place_name(dest)
+        u["hotel_city"] = _resolve_hotel_city(dest)
 
     hin = plan.hotel_checkin or plan.depart_date
     hout = plan.hotel_checkout or plan.return_date or plan.depart_date
@@ -818,7 +898,7 @@ def _llm_parser_planner_node(state: TravelGraphState) -> TravelGraphState:
         destination=dest_norm or plan.destination,
         depart_date=plan.depart_date,
         return_date=plan.return_date,
-        hotel_city=_primary_place_name(plan.hotel_city) if plan.hotel_city else plan.hotel_city,
+        hotel_city=_resolve_hotel_city(plan.hotel_city) if plan.hotel_city else plan.hotel_city,
         hotel_checkin=plan.hotel_checkin,
         hotel_checkout=plan.hotel_checkout,
         preferences=prefs,
@@ -1002,7 +1082,8 @@ def _hotel_node(state: TravelGraphState) -> TravelGraphState:
 def _to_flight_options(data: dict[str, Any], include_raw: bool, max_options: int) -> list[FlightOption]:
     options: list[FlightOption] = []
     search_currency = data.get("search_parameters", {}).get("currency")
-    for idx, item in enumerate(data.get("flights", [])[:max_options]):
+    all_items = (data.get("best_flights") or []) + (data.get("flights") or [])
+    for idx, item in enumerate(all_items[:max_options]):
         legs = item.get("flights", []) or []
         airline = legs[0].get("airline") if legs else None
 

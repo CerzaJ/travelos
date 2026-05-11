@@ -46,7 +46,7 @@ const buildReviewDataFromHistory = (data) => {
   const { request, flights, hotels, pricing } = data
   const { origin, destination, departure_date, return_date, adults, children, budget_max, notes } =
     request
-  const currency = pricing?.currency || 'MXN'
+  const currency = 'USD'
   const nights = getDurationDays(departure_date, return_date)
 
   const sortedFlights = [...(flights || [])].sort((a, b) => (a.price || 0) - (b.price || 0))
@@ -55,8 +55,11 @@ const buildReviewDataFromHistory = (data) => {
   )
   const flight = sortedFlights[Math.floor((sortedFlights.length - 1) / 2)] || null
   const hotel = sortedHotels[Math.floor((sortedHotels.length - 1) / 2)] || null
-  const totalPrice =
-    flight && hotel ? (flight.price || 0) + (hotel.price_per_night || 0) * nights : 0
+
+  // Precio total: si hay vuelo pero no hotel, usar solo el vuelo
+  const flightPrice = flight?.price || 0
+  const hotelPrice = hotel ? (hotel.price_per_night || 0) * nights : 0
+  const totalPrice = flightPrice + hotelPrice
 
   const clientName = notes ? notes.split('|')[0]?.trim() : null
 
@@ -64,7 +67,9 @@ const buildReviewDataFromHistory = (data) => {
     requestSummary: {
       destination,
       dateRange: formatDateRange(departure_date, return_date),
-      travelers: `${adults || 1} Adults${(children || 0) > 0 ? `, ${children} Children` : ''}`,
+      adults: adults || 1,
+      children: children || 0,
+      travelers: `${adults || 1}-${children || 0}`,
       budget: budget_max ? formatMoney(Number(budget_max), currency) : '-',
       preferences: clientName || 'No additional preferences.',
     },
@@ -144,6 +149,8 @@ function App() {
       handleNavigate('request-processing')
       return
     }
+    // Navegar primero para feedback inmediato
+    handleNavigate('request-review')
     if (row?.id) {
       try {
         const res = await fetch(`${API_URL}/requests/${row.id}/packages`)
@@ -155,7 +162,6 @@ function App() {
         console.error('Error loading packages:', e)
       }
     }
-    handleNavigate('request-review')
   }
 
   const handleLogin = (userData) => {

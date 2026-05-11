@@ -12,10 +12,10 @@ export default function NewTravelRequestPage({ onNavigate, onRequestSubmit }) {
   const [departureCityDisplay, setDepartureCityDisplay] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [travelers, setTravelers] = useState('2-0')
+  const [adults, setAdults] = useState(2)
+  const [children, setChildren] = useState(0)
   const [minBudget, setMinBudget] = useState('')
   const [maxBudget, setMaxBudget] = useState('')
-  const [currency, setCurrency] = useState('MXN')
   const [preferences, setPreferences] = useState('')
   const [submitError, setSubmitError] = useState('')
 
@@ -47,9 +47,8 @@ export default function NewTravelRequestPage({ onNavigate, onRequestSubmit }) {
       return
     }
 
-    const [adultsRaw, childrenRaw] = travelers.split('-')
-    const adults = Number(adultsRaw || 2)
-    const children = Number(childrenRaw || 0)
+    const adultsNum = Number(adults) || 2
+    const childrenNum = Number(children) || 0
 
     const { data: { session } } = await supabase.auth.getSession()
 
@@ -58,11 +57,13 @@ export default function NewTravelRequestPage({ onNavigate, onRequestSubmit }) {
       request_id: `req-${Date.now()}`,
       origin: departureCity,
       destination,
+      origin_display: departureCityDisplay || departureCity,
+      destination_display: destinationDisplay || destination,
       departure_date: startDate,
       return_date: endDate,
-      travelers: { adults, children },
+      travelers: { adults: adultsNum, children: childrenNum },
       budget_mxn: budgetValue,
-      currency,
+      currency: 'USD',
       preferences: {
         hotel_stars: 4,
         hotel_type: 'standard',
@@ -80,10 +81,10 @@ export default function NewTravelRequestPage({ onNavigate, onRequestSubmit }) {
       clientName,
       clientEmail,
       preferences,
-      travelers,
+      travelers: `${adultsNum}-${childrenNum}`,
       minBudget,
       maxBudget,
-      currency,
+      currency: 'USD',
     }
 
     if (onRequestSubmit) onRequestSubmit(payload, formContext)
@@ -153,7 +154,7 @@ export default function NewTravelRequestPage({ onNavigate, onRequestSubmit }) {
               />
             </div>
           </div>
-          <div className="form-grid form-grid-3">
+          <div className="form-grid form-grid-2">
             <div className="form-field">
               <label className="form-label" htmlFor="start-date">Start date</label>
               <input id="start-date" type="date" className="form-input"
@@ -164,46 +165,40 @@ export default function NewTravelRequestPage({ onNavigate, onRequestSubmit }) {
               <input id="end-date" type="date" className="form-input"
                 value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
             </div>
+          </div>
+          <div className="form-grid form-grid-2">
             <div className="form-field">
-              <label className="form-label" htmlFor="travelers">Travelers</label>
-              <select id="travelers" className="form-input" value={travelers}
-                onChange={(e) => setTravelers(e.target.value)}>
-                <option value="1-0">1 Adult</option>
-                <option value="2-0">2 Adults</option>
-                <option value="2-1">2 Adults, 1 Child</option>
-                <option value="2-2">2 Adults, 2 Children</option>
-                <option value="4-0">Group (4 Adults)</option>
+              <label className="form-label" htmlFor="adults">Adults</label>
+              <select id="adults" className="form-input" value={adults}
+                onChange={(e) => setAdults(Number(e.target.value))}>
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>{n} {n === 1 ? 'Adult' : 'Adults'}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="children">Children</label>
+              <select id="children" className="form-input" value={children}
+                onChange={(e) => setChildren(Number(e.target.value))}>
+                {Array.from({ length: 7 }, (_, i) => i).map((n) => (
+                  <option key={n} value={n}>{n === 0 ? 'No children' : `${n} ${n === 1 ? 'Child' : 'Children'}`}</option>
+                ))}
               </select>
             </div>
           </div>
         </section>
 
         <section className="form-card">
-          <h3 className="form-card-title">Budget</h3>
-          <p className="form-hint">💡 Si no encuentras vuelos con MXN, intenta con USD — tiene mayor cobertura de rutas internacionales.</p>
-          <div className="form-grid form-grid-3">
-            <div className="form-field">
-              <label className="form-label" htmlFor="currency">Currency</label>
-              <select id="currency" className="form-input" value={currency}
-                onChange={(e) => setCurrency(e.target.value)}>
-                <option value="MXN">MXN — Peso Mexicano</option>
-                <option value="USD">USD — US Dollar</option>
-                <option value="EUR">EUR — Euro</option>
-                <option value="GBP">GBP — British Pound</option>
-                <option value="CAD">CAD — Canadian Dollar</option>
-                <option value="COP">COP — Peso Colombiano</option>
-                <option value="ARS">ARS — Peso Argentino</option>
-                <option value="BRL">BRL — Real Brasileño</option>
-              </select>
-            </div>
+          <h3 className="form-card-title">Budget <span style={{ fontSize: 12, fontWeight: 400, color: '#6b7280' }}>(USD)</span></h3>
+          <div className="form-grid form-grid-2">
             <div className="form-field">
               <label className="form-label" htmlFor="min-budget">Minimum budget</label>
-              <input id="min-budget" type="number" className="form-input" placeholder="5000"
+              <input id="min-budget" type="number" className="form-input" placeholder="300"
                 value={minBudget} onChange={(e) => setMinBudget(e.target.value)} />
             </div>
             <div className="form-field">
               <label className="form-label" htmlFor="max-budget">Maximum budget</label>
-              <input id="max-budget" type="number" className="form-input" placeholder="10000"
+              <input id="max-budget" type="number" className="form-input" placeholder="600"
                 value={maxBudget} onChange={(e) => setMaxBudget(e.target.value)} required />
             </div>
           </div>

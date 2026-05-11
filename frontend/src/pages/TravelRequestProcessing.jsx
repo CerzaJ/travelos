@@ -117,14 +117,16 @@ export default function TravelRequestProcessingPage({ onNavigate, onReviewReady,
         const [adultsRaw, childrenRaw] = (travelers || '2-0').split('-')
         const adults   = Number(adultsRaw  || 2)
         const children = Number(childrenRaw || 0)
-        const currency = data.pricing?.currency || formCurrency || 'MXN'
+        const currency = 'USD'
         const nights   = getDurationDays(startDate, endDate)
 
         const reviewData = {
           requestSummary: {
             destination,
             dateRange:    formatDateRange(startDate, endDate),
-            travelers:    `${adults} Adults${children > 0 ? `, ${children} Children` : ''}`,
+            adults,
+            children,
+            travelers,
             budget:       `${formatMoney(Number(minBudget || maxBudget), currency)} – ${formatMoney(Number(maxBudget || minBudget), currency)}`,
             preferences:  preferences || 'No additional preferences.',
           },

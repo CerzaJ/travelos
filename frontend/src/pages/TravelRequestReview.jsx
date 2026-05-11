@@ -25,15 +25,21 @@ const formatShortDate = (isoDate) => {
   })
 }
 
+const formatDestinationLabel = (raw) => {
+  if (!raw) return 'travel destination'
+  // "Ibiza (IBZ)" → "Ibiza", "IBZ" → "IBZ"
+  const m = raw.match(/^(.+?)\s*\([A-Z]{3}\)$/)
+  return m ? m[1].trim() : raw
+}
+
 export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
   const packages = reviewData?.packages || []
   const tripContext = reviewData?.tripContext || null
-  const destinationLabel = reviewData?.requestSummary?.destination || 'travel destination'
+  const destinationLabel = formatDestinationLabel(reviewData?.requestSummary?.destination)
   const packageImageUrls = useMemo(
     () =>
       packages.reduce((accumulator, pkg) => {
-        accumulator[pkg.id] =
-          pkg.imageUrl ||
+        accumulator[pkg.id] = pkg.imageUrl ||
           `https://picsum.photos/seed/${encodeURIComponent(destinationLabel)}/640/360`
         return accumulator
       }, {}),
@@ -75,18 +81,27 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
     if (!detailPackage?.flight || !detailPackage?.hotel) return null
     const currency = detailPackage.currency || 'MXN'
     const nights = tripContext?.nights || 1
+    const adults = reviewData?.requestSummary?.adults ?? 1
+    const children = reviewData?.requestSummary?.children ?? 0
+    const totalPassengers = adults + children
     const flightCost = typeof detailPackage.flight.price === 'number' ? detailPackage.flight.price : 0
+    const flightPerPerson = totalPassengers > 0 ? Math.round(flightCost / totalPassengers) : flightCost
     const nightly = typeof detailPackage.hotel.price_per_night === 'number' ? detailPackage.hotel.price_per_night : 0
     const hotelSubtotal = nightly * nights
     return {
       currency,
       nights,
+      adults,
+      children,
+      totalPassengers,
       flightCost,
+      flightPerPerson,
+      nightly,
       hotelSubtotal,
       componentTotal: flightCost + hotelSubtotal,
       packageTotal: typeof detailPackage.totalPrice === 'number' ? detailPackage.totalPrice : flightCost + hotelSubtotal,
     }
-  }, [detailPackage, tripContext])
+  }, [detailPackage, tripContext, reviewData])
 
   if (detailPackageId && !detailPackage) {
     return (
@@ -139,10 +154,11 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
   if (!reviewData) {
     return (
       <AppLayout pageTitle="Travel Requests" activeItem="travel-requests" onNavigate={onNavigate}>
-        <section className="card">
-          <h2 className="card-title">No generated request to review</h2>
+        <section className="card" style={{ textAlign: 'center', padding: '3rem 2rem' }}>
+          <span className="processing-spinner" style={{ display: 'inline-block', marginBottom: 16 }} />
+          <h2 className="card-title">Cargando paquete…</h2>
           <p className="card-subtitle">
-            Generate travel packages first to view this review workspace.
+            Recuperando vuelos y hoteles guardados.
           </p>
           <div className="form-actions-row">
             <button className="primary-button" onClick={() => onNavigate && onNavigate('new-request')}>
@@ -155,26 +171,20 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
   }
 
   if (detailPackage && flightHotelBreakdown) {
-    const HERO_FALLBACKS = [
-      'photo-1507525428034-b723cf961d3e', // beach tropical
-      'photo-1480714378702-eba0c5723d95', // city aerial
-      'photo-1464822759023-fed622ff2c3b', // mountain lake
-      'photo-1519677100203-a0e668c92439', // europe city
-      'photo-1476514525405-8d4b2c7b4b4c', // coast aerial
-      'photo-1441974231531-c6227db76b6e', // forest path
-      'photo-1533105079780-92b9be482077', // beach ocean
-      'photo-1513635269975-59663e0ac1ad', // city skyline
-    ]
-    const fallbackIdx = destinationLabel.charCodeAt(0) % HERO_FALLBACKS.length
-    const heroFallback = `https://images.unsplash.com/${HERO_FALLBACKS[fallbackIdx]}?auto=format&fit=crop&w=1200&q=80`
-    const heroImage = detailPackage.imageUrl || heroFallback
     const flight = detailPackage.flight
     const hotel = detailPackage.hotel
-    const originCode = tripContext?.origin?.slice(0, 3).toUpperCase() || 'ORG'
-    const destCode =
-      tripContext?.destination?.slice(0, 3).toUpperCase() ||
-      destinationLabel.slice(0, 3).toUpperCase() ||
-      'DST'
+    // picsum.photos es un CDN de imágenes placeholder sin restricciones de CORS
+    const heroFallback = `https://picsum.photos/seed/${encodeURIComponent(destinationLabel)}/1200/400`
+    const heroImage = (hotel?.image_url && hotel.image_url.startsWith('http'))
+      ? hotel.image_url
+      : heroFallback
+    const extractIATA = (display) => {
+      if (!display) return null
+      const m = display.match(/\(([A-Z]{3})\)/)
+      return m ? m[1] : display.slice(0, 3).toUpperCase()
+    }
+    const originCode = extractIATA(tripContext?.origin) || 'ORG'
+    const destCode = extractIATA(tripContext?.destination) || destinationLabel.slice(0, 3).toUpperCase() || 'DST'
 
     return (
       <AppLayout pageTitle="Travel Requests" activeItem="travel-requests" onNavigate={onNavigate}>
@@ -184,10 +194,11 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
               src={heroImage}
               alt={`Destination ${destinationLabel}`}
               className="package-detail-hero-image"
-              loading="lazy"
               onError={(e) => {
                 e.target.onerror = null
-                e.target.src = heroFallback
+                e.target.src = e.target.src === heroFallback
+                  ? `https://picsum.photos/1200/400`
+                  : heroFallback
               }}
             />
             <div className="package-detail-hero-overlay">
@@ -224,9 +235,11 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
                       <time className="package-detail-leg-date">{formatShortDate(tripContext?.departureDate)}</time>
                     </div>
                     <p className="package-detail-leg-route">
-                      {originCode} → {destCode}{' '}
+                      {flight.via
+                        ? `${originCode} → ${flight.via} → ${destCode}`
+                        : `${originCode} → ${destCode}`}{' '}
                       <span className="package-detail-leg-muted">
-                        {flight.via ? `Via ${flight.via}` : 'Non-stop'} · {flight.duration_hours ?? '—'}h
+                        {flight.via ? 'Con escala' : 'Directo'} · {flight.duration_hours ?? '—'}h
                       </span>
                     </p>
                     <p className="package-detail-leg-airline">{flight.airline || '—'}</p>
@@ -243,7 +256,9 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
                       <time className="package-detail-leg-date">{formatShortDate(tripContext?.returnDate)}</time>
                     </div>
                     <p className="package-detail-leg-route">
-                      {destCode} → {originCode}
+                      {flight.via
+                        ? `${destCode} → ${flight.via} → ${originCode}`
+                        : `${destCode} → ${originCode}`}
                     </p>
                     <p className="package-detail-leg-airline">{flight.airline || '—'}</p>
                     <p className="package-detail-leg-times" style={{ color: '#9ca3af' }}>
@@ -265,7 +280,7 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
                       alt={hotel.name || destinationLabel}
                       onError={(e) => {
                         e.target.onerror = null
-                        e.target.src = `https://picsum.photos/seed/${encodeURIComponent(hotel.name || destinationLabel)}/560/320`
+                        e.target.src = 'https://picsum.photos/560/320'
                       }}
                     />
                   </div>
@@ -285,27 +300,53 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
 
             <aside className="package-detail-aside card">
               <h3 className="package-detail-aside-title">Component breakdown</h3>
+
+              <div style={{ marginBottom: 12, padding: '8px 10px', background: '#f8fafc', borderRadius: 8, fontSize: 13 }}>
+                <p style={{ margin: '0 0 2px', fontWeight: 600, color: '#374151' }}>Passengers quoted</p>
+                <p style={{ margin: 0, color: '#6b7280' }}>
+                  {flightHotelBreakdown.adults} {flightHotelBreakdown.adults === 1 ? 'adult' : 'adults'}
+                  {flightHotelBreakdown.children > 0
+                    ? ` · ${flightHotelBreakdown.children} ${flightHotelBreakdown.children === 1 ? 'child' : 'children'}`
+                    : ' · no children'}
+                </p>
+              </div>
+
               <ul className="package-detail-price-list">
                 <li>
-                  <span>Flights (quoted bucket)</span>
+                  <span>
+                    Flights
+                    <br />
+                    <small style={{ color: '#9ca3af', fontWeight: 400 }}>
+                      {formatMoney(flightHotelBreakdown.flightPerPerson, flightHotelBreakdown.currency)}/person × {flightHotelBreakdown.totalPassengers}
+                    </small>
+                  </span>
                   <strong>{formatMoney(flightHotelBreakdown.flightCost, flightHotelBreakdown.currency)}</strong>
                 </li>
                 <li>
                   <span>
-                    Hotel ({flightHotelBreakdown.nights}{' '}
-                    {flightHotelBreakdown.nights === 1 ? 'night' : 'nights'})
+                    Hotel
+                    <br />
+                    <small style={{ color: '#9ca3af', fontWeight: 400 }}>
+                      {formatMoney(flightHotelBreakdown.nightly, flightHotelBreakdown.currency)}/night × {flightHotelBreakdown.nights} {flightHotelBreakdown.nights === 1 ? 'night' : 'nights'}
+                    </small>
                   </span>
                   <strong>{formatMoney(flightHotelBreakdown.hotelSubtotal, flightHotelBreakdown.currency)}</strong>
                 </li>
               </ul>
               <div className="package-detail-price-divider" />
-              <div className="package-detail-price-row package-detail-price-row--subtotal">
-                <span>Flight + hotel subtotal</span>
-                <strong>{formatMoney(flightHotelBreakdown.componentTotal, flightHotelBreakdown.currency)}</strong>
-              </div>
               <div className="package-detail-price-row package-detail-price-row--total">
-                <span>Package total (shown on card)</span>
-                <strong>{formatMoney(flightHotelBreakdown.packageTotal, flightHotelBreakdown.currency)}</strong>
+                <span>Total (USD)</span>
+                <strong>{formatMoney(flightHotelBreakdown.packageTotal, 'USD')}</strong>
+              </div>
+              <div className="package-detail-price-row" style={{ marginTop: 4 }}>
+                <span style={{ fontSize: 12, color: '#6b7280' }}>
+                  Aprox. en MXN
+                  <br />
+                  <span style={{ fontSize: 11 }}>Tipo de cambio ~$17.50</span>
+                </span>
+                <strong style={{ color: '#6b7280' }}>
+                  {formatMoney(Math.round(flightHotelBreakdown.packageTotal * 17.5), 'MXN')}
+                </strong>
               </div>
               <button
                 type="button"
@@ -337,8 +378,23 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
               <strong>{reviewData.requestSummary.dateRange}</strong>
             </div>
             <div className="review-summary-item">
-              <span>Travelers</span>
-              <strong>{reviewData.requestSummary.travelers}</strong>
+              <span>Adults</span>
+              <strong>
+                {reviewData.requestSummary.adults != null
+                  ? reviewData.requestSummary.adults
+                  : (reviewData.requestSummary.travelers?.split('-')[0] ?? '—')}
+              </strong>
+            </div>
+            <div className="review-summary-item">
+              <span>Children</span>
+              <strong>
+                {(() => {
+                  const c = reviewData.requestSummary.children
+                  if (c != null) return c > 0 ? c : 'None'
+                  const fromStr = Number(reviewData.requestSummary.travelers?.split('-')[1] ?? 0)
+                  return fromStr > 0 ? fromStr : 'None'
+                })()}
+              </strong>
             </div>
             <div className="review-summary-item">
               <span>Budget</span>
@@ -397,7 +453,8 @@ export default function TravelRequestReviewPage({ onNavigate, reviewData }) {
                     loading="lazy"
                     onLoad={() => handleImageResolved(pkg.id)}
                     onError={(e) => {
-                      e.target.src = `https://picsum.photos/seed/${encodeURIComponent(destinationLabel)}/640/360`
+                      e.target.onerror = null
+                      e.target.src = `https://picsum.photos/640/360`
                       handleImageResolved(pkg.id)
                     }}
                   />

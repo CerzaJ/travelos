@@ -89,6 +89,8 @@ class PlanTripRequest(BaseModel):
     preferences: PreferencesIn = Field(default_factory=PreferencesIn)
     notes: str | None = None       # "clientName | clientEmail | preferences"
     user_id: str | None = None     # Supabase auth user UUID (opcional)
+    origin_display: str | None = None       # "Mexico City (MEX)"
+    destination_display: str | None = None  # "Mykonos (JMK)"
 
 
 # ── Schemas de salida (lo que espera el frontend) ─────────────────────────────
@@ -163,17 +165,34 @@ def _map_flight(f: FlightOption) -> FlightOut:
     dep = _seg_time(segs, "departure_time") or _seg_time(segs, "departure")
     last = segs[-1:] if segs else []
     arr = _seg_time(last, "arrival_time") or _seg_time(last, "arrival")
+    # Extraer escala: primero del hub fallback, luego de los layovers normales de SerpAPI
+    hub = raw.get("_via_hub")
+    layovers_raw = raw.get("layovers") or []
+    serpapi_via = None
+    if layovers_raw and isinstance(layovers_raw[0], dict):
+        serpapi_via = layovers_raw[0].get("id") or layovers_raw[0].get("name")
+    via = hub or serpapi_via
     return FlightOut(
         airline=f.airline or f.title or "Unknown Airline",
         price=f.total_price,
         departure_time=dep,
         arrival_time=arr,
         duration_hours=round(f.total_duration_min / 60, 1) if f.total_duration_min else None,
-        via=raw.get("_via_hub"),
+        via=via,
     )
 
 
-def _map_hotel(h: HotelOption, destination: str) -> HotelOut:
+def _city_from_display(display: str | None, fallback: str) -> str:
+    """Extrae el nombre de ciudad de un display name tipo 'Mykonos (JMK)', o usa el fallback."""
+    if display:
+        # "Mykonos (JMK)" → "Mykonos"
+        city = display.split("(")[0].strip()
+        if city:
+            return city
+    return fallback
+
+
+def _map_hotel(h: HotelOption, destination: str, destination_display: str | None = None) -> HotelOut:
     stars = None
     if h.overall_rating is not None:
         try:
@@ -190,11 +209,12 @@ def _map_hotel(h: HotelOption, destination: str) -> HotelOut:
         # thumbnail es la versión pequeña (~287px) — más rápida para UI
         image_url = first.get("thumbnail") or first.get("original_image")
 
+    city_label = _city_from_display(destination_display, destination)
     return HotelOut(
         name=h.property_name,
         stars=stars,
         price_per_night=h.nightly_rate or h.total_rate,
-        location=h.location or destination,
+        location=h.location or city_label,
         image_url=image_url,
     )
 
@@ -318,14 +338,23 @@ async def _persist(req: PlanTripRequest, output: TravelQueryOutput) -> None:
 
         # 4. hotel_options — una fila por hotel del agente
         hotel_ids: list[str] = []
+        hotel_image_urls: list[str | None] = []
         for hotel in output.hotel_options:
+            # Extraer imagen del raw para persistirla permanentemente
+            raw_h = hotel.raw_option_jsonb or {}
+            images_h = raw_h.get("images") or []
+            img_url: str | None = None
+            if images_h and isinstance(images_h[0], dict):
+                img_url = images_h[0].get("thumbnail") or images_h[0].get("original_image")
+            hotel_image_urls.append(img_url)
+
             rh = await client.post(f"{SUPABASE_URL}/rest/v1/HOTEL_OPTIONS", headers=headers, json={
                 "job_id": job_id,
                 "property_token": hotel.property_token,
                 "property_name": hotel.property_name,
                 "nightly_rate": hotel.nightly_rate,
                 "total_rate": hotel.total_rate,
-                "currency": hotel.currency or "MXN",
+                "currency": hotel.currency or "USD",
                 "overall_rating": hotel.overall_rating,
                 "location_rating": hotel.location_rating,
                 "review_count": hotel.review_count,
@@ -344,6 +373,7 @@ async def _persist(req: PlanTripRequest, output: TravelQueryOutput) -> None:
         # 5. packages — una por combinación flight+hotel (hasta 3)
         tiers = ["budget", "standard", "premium"]
         for i, (fid, hid) in enumerate(zip(flight_ids[:3], hotel_ids[:3])):
+            pkg_image = hotel_image_urls[i] if i < len(hotel_image_urls) else None
             rp = await client.post(f"{SUPABASE_URL}/rest/v1/PACKAGES", headers=headers, json={
                 "job_id": job_id,
                 "flight_option_id": fid,
@@ -351,11 +381,15 @@ async def _persist(req: PlanTripRequest, output: TravelQueryOutput) -> None:
                 "tier": (reg.tier if reg and i == 0 else None) or tiers[i % 3],
                 "package_rank": i + 1,
                 "total_price": reg.total_price if reg else None,
-                "currency": reg.currency if reg else "MXN",
+                "currency": reg.currency if reg else "USD",
                 "within_budget": reg.within_budget if reg else None,
                 "quality_score": reg.quality_score if reg else None,
                 "price_breakdown_jsonb": reg.price_breakdown if reg else None,
-                "package_snapshot_jsonb": {"summary": output.summary, "warnings": output.warnings},
+                "package_snapshot_jsonb": {
+                    "summary": output.summary,
+                    "warnings": output.warnings,
+                    "hotel_image_url": pkg_image,
+                },
             })
             if rp.status_code not in (200, 201):
                 logger.error("packages insert failed: %s %s", rp.status_code, rp.text[:200])
@@ -392,9 +426,13 @@ async def plan_trip(req: PlanTripRequest):
         special_preferences=extras_str or None,
     )
 
-    # Query en lenguaje natural para reforzar el parseo del LLM
+    # Query en lenguaje natural para reforzar el parseo del LLM.
+    # Usamos display names cuando están disponibles para que el LLM extraiga
+    # el nombre de ciudad correcto para la búsqueda de hoteles.
+    origin_label = req.origin_display or req.origin
+    dest_label = req.destination_display or req.destination
     user_query = (
-        f"Plan a trip from {req.origin} to {req.destination}, "
+        f"Plan a trip from {origin_label} to {dest_label}, "
         f"departing {req.departure_date} and returning {req.return_date}, "
         f"for {travelers_label}, budget {req.budget_mxn} MXN."
     )
@@ -429,7 +467,7 @@ async def plan_trip(req: PlanTripRequest):
 
     # Mapear a formato del frontend
     flights = [_map_flight(f) for f in output.flight_options]
-    hotels = [_map_hotel(h, req.destination) for h in output.hotel_options]
+    hotels = [_map_hotel(h, req.destination, req.destination_display) for h in output.hotel_options]
 
     # Si el agente no encontró nada en absoluto, devolver 422 con contexto
     if not flights and not hotels:
@@ -582,12 +620,16 @@ async def get_request_packages(request_id: str):
             or "Unknown Airline"
         )
         dur_min = f.get("total_duration_min")
+        hub = raw.get("_via_hub")
+        layovers_h = raw.get("layovers") or []
+        via = hub or (layovers_h[0].get("id") if layovers_h and isinstance(layovers_h[0], dict) else None)
         flights.append(FlightOut(
             airline=airline,
             price=f.get("total_price"),
             departure_time=dep,
             arrival_time=arr,
             duration_hours=round(dur_min / 60, 1) if dur_min else None,
+            via=via,
         ))
 
     # Mapear hoteles desde datos raw de Supabase
